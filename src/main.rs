@@ -5,7 +5,11 @@ mod antlr_parser;
 mod passes;
 mod tests;
 mod toolkit;
+use core::fmt;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::{path::PathBuf, time::Instant};
+use std::fmt::Debug;
 
 use antlr_parser::cparser::{RULE_compoundStatement, RULE_functionDefinition};
 use clap::Parser;
@@ -136,11 +140,11 @@ fn main() {
             to pass_manager
             
         );
-    }
-    let err_flag;
-    timeit!({ err_flag = pass_manager.execute_passes(); }, "all passed finish");
+    };
+    let rst = timeit!({ pass_manager.execute_passes() }, "all passed finish");
     timeit!({ pass_manager.await_all_io_tasks() }, "all io tasks finish");
-    if err_flag {
-        panic!()
+    if rst.is_err() {
+        panic!("pass manager execute failed");
     }
 }
+
