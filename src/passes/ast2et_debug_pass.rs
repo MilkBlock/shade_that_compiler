@@ -33,9 +33,6 @@ impl Pass for Ast2EtDebugPass {
         //     et_node.load_ast_node_text(&ctx.ast_tree)?
         // }
         // 1.1 生成对应的png
-        if self.is_gen_png {
-            generate_png_by_graph_multi_tasks(&ctx.et_tree.clone(), "et_tree".to_string(), &[Config::Record, Config::Title("et_tree".to_string()),Config::NodeIndexLabel],&mut ctx.io_task_list)?;
-        }
 
         Ok(())
     }
@@ -43,4 +40,10 @@ impl Pass for Ast2EtDebugPass {
     fn get_desc(&self) -> String { return "pass Ast2EtDebugPass description".to_string(); }
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "Ast2EtDebugPass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        if self.is_gen_png {
+            generate_png_by_graph_multi_tasks(&ctx.et_tree.clone(), "et_tree".to_string(), &[Config::Record, Config::Title("et_tree".to_string()),Config::NodeIndexLabel],&mut ctx.io_task_list).unwrap();
+        }
+    }
 }

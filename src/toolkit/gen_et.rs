@@ -217,7 +217,7 @@ fn process_init_declarator(et_tree:&mut EtTree, ast_tree:&AstTree, scope_tree:&S
     let declarator_node = find!(rule RULE_declarator at init_decl_node in ast_tree).unwrap();
 
     // 考虑到direct_decl_node 可能有 数组运算符，所以要进行进一步解析
-    let direct_decl_node = find!(rule RULE_directDeclarator at declarator_node in ast_tree).expect(format!("error when try unwrap its son as direct_declaration_node {}", declarator_node).as_str());
+    let direct_decl_node = find!(rule RULE_directDeclarator at declarator_node in ast_tree).unwrap_or_else(||panic!("error when try unwrap its son as direct_declaration_node {}", declarator_node));
 
     let op_assign_node = find!(term Assign at init_decl_node in ast_tree);
 
@@ -345,7 +345,7 @@ fn process_assign_expr(et_tree:&mut EtTree, ast_tree:&AstTree, scope_tree:&Scope
     }
 }
 fn process_cond_expr(et_tree:&mut EtTree, ast_tree:&AstTree, scope_tree:&ScopeTree, cond_expr_node:u32, scope_node:u32, parent_et_node:u32) {
-    let logical_or_node = find!(rule RULE_logicalOrExpression at cond_expr_node in ast_tree).expect(format!("cond_node_id {}", cond_expr_node).as_str());
+    let logical_or_node = find!(rule RULE_logicalOrExpression at cond_expr_node in ast_tree).unwrap_or_else(||panic!("cond_node_id {}", cond_expr_node));
     process_any_expr_inner_node(et_tree, ast_tree, scope_tree, logical_or_node, scope_node, parent_et_node);
 }
 fn process_logical_or_expr(et_tree:&mut EtTree, ast_tree:&AstTree, scope_tree:&ScopeTree, logical_or_expr_node:u32, scope_node:u32, parent_et_node:u32) {
@@ -684,13 +684,13 @@ fn process_cast_expr(et_tree:&mut EtTree, ast_tree:&AstTree, scope_tree:&ScopeTr
     // 检查 castExpression 节点是否是类型转换的情况
     if let Some(type_name_node) = find!(rule RULE_typeName at cast_expr_node in ast_tree) {
         // 如果存在 typeName，说明是类型转换的情况
-        let type_sym = SymIdx::new(scope_node, node!(at type_name_node in ast_tree).op_text.clone().unwrap());
+        let type_sym = SymIdx::new(scope_node, node!(at type_name_node in ast_tree).op_text.clone().unwrap().leak());
         // let cast_node = add_node_with_edge!({EtNodeType::new_op_cast( cast_expr_node).into()} with_edge {EtEdgeType::Direct.into()} from parent_et_node in et_tree);
         // 添加 cast op 节点的左节点，这是个 type symbol
         // add_node_with_edge!({EtNodeType::new_symbol(scope_node,type_sym,DeclOrDefOrUse::Use).into()} with_edge {EtEdgeType::Direct.into()} from cast_node in et_tree);
 
         // 递归处理 castExpression
-        let child_cast_expr_node = find!(rule RULE_castExpression at cast_expr_node in ast_tree).expect(format!("在 节点 {} 下找不到 castExpr", type_name_node).as_str());
+        let child_cast_expr_node = find!(rule RULE_castExpression at cast_expr_node in ast_tree).unwrap_or_else(||panic!("在 节点 {} 下找不到 castExpr", type_name_node));
         process_cast_expr(et_tree, ast_tree, scope_tree, child_cast_expr_node, scope_node, parent_et_node);
     } else if let Some(unary_expr_node) = find!(rule RULE_unaryExpression at cast_expr_node in ast_tree) {
         // 如果是 unaryExpression，直接处理
@@ -715,7 +715,7 @@ pub fn process_unary_expr(et_tree:&mut EtTree, ast_tree:&AstTree, scope_tree:&Sc
     // 检查是否存在一元操作符
     if let Some(unary_operator_node) = find!(rule RULE_unaryOperator at unary_expr_node in ast_tree) {
         let unary_operator_term_node = node!(at unary_operator_node in ast_tree).child_vec[0];
-        // .expect(format!("在 unaryOperator {} 下找不到 unaryOpertor term",unary_operator_node).as_str());
+        // .unwrap_or_else(||panic!("在 unaryOperator {} 下找不到 unaryOpertor term",unary_operator_node));
         let op_node = add_node_with_edge!({get_expr_node_of_unary_op_node(unary_operator_term_node)} with_edge {EtEdgeType::Direct.into()} from parent_et_node in et_tree);
 
         // 一元操作符后跟的是 unaryExpression
@@ -759,7 +759,7 @@ fn process_postfix_expr(et_tree:&mut EtTree, ast_tree:&AstTree, scope_tree:&Scop
     } else if let Some(_string_node) = find!(term PlusPlus at postfix_expr_node in ast_tree) {
         //说明这是个++的语法
         let et_plusplus_node = add_node_with_edge!({EtNodeType::new_op_right_plusplus( postfix_expr_node).into()} with_edge {EtEdgeType::Direct.into()} from parent_et_node in et_tree);
-        let postfix_expr_node = find!(rule RULE_postfixExpression at postfix_expr_node in ast_tree).expect(format!("process_postfix_expr error at ast_node{}", postfix_expr_node).as_str());
+        let postfix_expr_node = find!(rule RULE_postfixExpression at postfix_expr_node in ast_tree).unwrap_or_else(||panic!("process_postfix_expr error at ast_node{}", postfix_expr_node));
         process_postfix_expr(et_tree, ast_tree, scope_tree, postfix_expr_node, scope_node, et_plusplus_node,DeclOrDefOrUse::Def);
     } else if let Some(_string_node) = find!(term MinusMinus at postfix_expr_node in ast_tree) {
         //说明这是个--的语法
@@ -811,7 +811,7 @@ fn process_initializer(et_tree:&mut EtTree, ast_tree:&AstTree, scope_tree:&Scope
 /// 会把表达式中的符号添加到 symtab 中
 /// ? 这个过程并不需要符号表，因为符号表是用来检查 def use 是否合法的，比如变量在 定义前被使用了就是非法
 fn process_ident(et_tree:&mut EtTree, ast_tree:&AstTree, _scope_tree:&ScopeTree, ident_node:u32, scope_node:u32, parent_et_node:u32, def_or_use:DeclOrDefOrUse) {
-    let sym_name = node!(at ident_node in ast_tree).op_text.clone().unwrap();
+    let sym_name = node!(at ident_node in ast_tree).op_text.clone().unwrap().leak();
     // let sym_idx = SymbolIndex::new(scope_node, symbol_name);
 
     let symidx = SymIdx::new(scope_node, sym_name);
@@ -819,7 +819,7 @@ fn process_ident(et_tree:&mut EtTree, ast_tree:&AstTree, _scope_tree:&ScopeTree,
     add_node_with_edge!({EtNodeType::new_symbol(ident_node, symidx.as_rc(), def_or_use).into()} with_edge {EtEdgeType::Direct.into()} from parent_et_node in et_tree);
 }
 fn process_literal(et_tree:&mut EtTree, ast_tree:&AstTree, _scope_tree:&ScopeTree, literal_node:u32, scope_node:u32, parent_et_node:u32) {
-    let sym_name = node!(at literal_node in ast_tree).op_text.clone().unwrap();
+    let sym_name = node!(at literal_node in ast_tree).op_text.clone().unwrap().leak();
     // let sym_idx = SymbolIndex::new(scope_node, symbol_name);
 
     let literal_symidx = SymIdx::new(scope_node, sym_name);

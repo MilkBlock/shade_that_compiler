@@ -143,30 +143,30 @@ impl Index<usize> for InstrList{
     }
 }
 impl CfgNode {
-    pub fn push_nhwc_instr(&mut self,instr:NhwcInstr,instr_slab:&mut InstrSlab<NhwcInstr>) -> Result<usize>{
+    pub fn push_nhwc_instr(&mut self,instr:NhwcInstr,instr_slab:&mut InstrSlab<NhwcInstr>) -> usize{
         let instr = instr_slab.insert_instr(instr);
-        match &instr!(at instr in instr_slab)?.instr_type{
+        match &instr!(at instr in instr_slab).instr_type{
             NhwcInstrType::Label { label_symidx: _ } => if self.op_label_instr.is_none(){ self.op_label_instr = Some(instr)} else {
-                return Err(anyhow!("label has been added, can't add {:?}",instr!(at instr in instr_slab)?))?
+                panic!("label has been added, can't add {:?}",instr!(at instr in instr_slab))
             },
             NhwcInstrType::Phi { lhs: _, rhs: _ } => self.phi_instrs.push(instr),
             NhwcInstrType::Jump { jump_op: _ } => self.op_jump_instr = Some(instr),
             _ => self.instrs.push(instr),
         }
         // $instrslab.get_mut_instr(instr)?.add_cfg_instr_idx(CfgInstrIdx::new($node,cfg_node_struct.instrs.len()-1, false));
-        Ok(instr)
+        instr
     }
-    pub fn insert_nhwc_instr(&mut self,instr:NhwcInstr, pos:usize ,instr_slab:&mut InstrSlab<NhwcInstr>) -> Result<usize>{
+    pub fn insert_nhwc_instr(&mut self,instr:NhwcInstr, pos:usize ,instr_slab:&mut InstrSlab<NhwcInstr>) -> usize{
         let instr = instr_slab.insert_instr(instr);
-        match &instr!(at instr in instr_slab)?.instr_type{
+        match &instr!(at instr in instr_slab).instr_type{
             NhwcInstrType::Label { label_symidx: _ } => self.op_label_instr = Some(instr),
             NhwcInstrType::Phi { lhs: _, rhs: _ } => self.phi_instrs.push(instr),
             NhwcInstrType::Jump { jump_op: _ } => self.op_jump_instr = Some(instr),
             _ => self.instrs.insert(pos,instr),
         }
-        Ok(instr)
+        instr
     }
-    pub fn load_ast_node_text(&mut self, ast_tree:&AstTree)  -> Result<()>{
+    pub fn load_ast_node_text(&mut self, ast_tree:&AstTree)  {
         match self.cfg_node_type.clone() {
             CfgNodeType::Entry { ast_node, calls_in_func: _ } => {
                 let node_text = node!(at ast_node in ast_tree).op_text.as_ref().unwrap().as_str();
@@ -233,30 +233,28 @@ impl CfgNode {
             }
         }
         self.text +="\n";
-        Ok(())
     }
-    pub fn load_instrs_text(&mut self, instr_slab:&InstrSlab<NhwcInstr>) -> Result<()>{
+    pub fn load_instrs_text(&mut self, instr_slab:&InstrSlab<NhwcInstr>) {
         if let Some(label_instr) = self.op_label_instr {
             self.text += "LabelInstr: \n";
-            self.text += format!("{:?} \n", instr!(at label_instr in instr_slab)?).as_str();
+            self.text += format!("{:?} \n", instr!(at label_instr in instr_slab)).as_str();
         }
         self.text +="\n";
         if self.phi_instrs.len()>0  {self.text += "PhiInstrs: \n\n";}
         for &phi_instr in self.phi_instrs.iter() {
-            self.text += format!("{:?} \n", instr!(at phi_instr in instr_slab)?).as_str();
+            self.text += format!("{:?} \n", instr!(at phi_instr in instr_slab)).as_str();
         }
         self.text +="\n";
         if self.instrs.len()>0  {self.text +="Instrs: \n\n";}
         for &instr in self.instrs.iter() {
-            self.text += format!("{:?} \n", instr!(at instr in instr_slab)?).as_str();
+            self.text += format!("{:?} \n", instr!(at instr in instr_slab)).as_str();
         }
         self.text +="\n";
         if let Some(label_instr) = self.op_jump_instr {
             self.text += "JumpInstr: \n";
-            self.text += format!("{:?} \n", instr!(at label_instr in instr_slab)?).as_str();
+            self.text += format!("{:?} \n", instr!(at label_instr in instr_slab)).as_str();
         }
         self.text +="\n";
-        Ok(())
     }
     pub fn clear_text(&mut self){
         self.text = String::new();
@@ -395,7 +393,7 @@ impl Debug for CfgNode {
 
 
 #[derive(Clone,Debug,PartialEq, PartialOrd,Eq,Ord)]
-pub struct CfgInstrIdx{
+pub struct SlotIdx{
     pub cfg_node:u32,
     pub in_cfg_instr_pos:InCfgNodeInstrPos,
 }
@@ -413,22 +411,22 @@ pub enum InCfgNodeInstrPos{
     }
 }
 
-impl CfgInstrIdx{
-    pub fn get_instr(&self,cfg_graph:&CfgGraph)-> Result<usize>{
+impl SlotIdx{
+    pub fn get_instr(&self,cfg_graph:&CfgGraph)-> usize{
         let cfg_node = self.cfg_node;
         let cfg_node_struct = node!(at cfg_node in cfg_graph);
         match &self.in_cfg_instr_pos{
             &InCfgNodeInstrPos::InPhi { phi_instr_pos } => {
-                cfg_node_struct.phi_instrs.get(phi_instr_pos).map(|s|*s).ok_or(anyhow!("在 cfg_node:{} 找不到这个phi_instr_pos:{}对应的instruction",cfg_node,phi_instr_pos))
+                *cfg_node_struct.phi_instrs.get(phi_instr_pos).unwrap_or_else(|| panic!("在 cfg_node:{} 找不到这个phi_instr_pos:{}对应的instruction",cfg_node,phi_instr_pos))
             },
             &InCfgNodeInstrPos::InInstrs { instr_pos } => {
-                cfg_node_struct.instrs.get(instr_pos).map(|s|*s).ok_or(anyhow!("在 cfg_node:{} 找不到这个instrs_instr_pos:{}对应的instruction",cfg_node,instr_pos))
+                *cfg_node_struct.instrs.get(instr_pos).unwrap_or_else(||panic!("在 cfg_node:{} 找不到这个instrs_instr_pos:{}对应的instruction",cfg_node,instr_pos))
             },
             InCfgNodeInstrPos::InLabel {  } => {
-                cfg_node_struct.op_label_instr.ok_or(anyhow!("在 cfg_node:{} 没有对应的label_instr",cfg_node))
+                *cfg_node_struct.op_label_instr.as_ref().unwrap_or_else(||panic!("在 cfg_node:{} 没有对应的label_instr",cfg_node))
             },
             InCfgNodeInstrPos::InJump {  } => {
-                cfg_node_struct.op_label_instr.ok_or(anyhow!("在 cfg_node:{} 没有对应的jump_instr",cfg_node))
+                *cfg_node_struct.op_label_instr.as_ref().unwrap_or_else(||panic!("在 cfg_node:{} 没有对应的jump_instr",cfg_node))
             },
         }
         // 如果找不到，直接抛出Err

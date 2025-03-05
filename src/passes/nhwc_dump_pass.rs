@@ -27,17 +27,16 @@ use log::error;
 ///
 #[derive(Debug)]
 pub struct NhwcDumpPass {
-    is_gen_nhwc_ir_file:bool
+    is_gen_nhwc_ir_file:bool,
+    nhwc_ir_vec : Vec<(usize,i32)>
 }
 impl NhwcDumpPass {
-    pub fn new(is_gen_nhwc_ir_file:bool) -> Self { NhwcDumpPass {  is_gen_nhwc_ir_file } }
+    pub fn new(is_gen_nhwc_ir_file:bool) -> Self { NhwcDumpPass {  is_gen_nhwc_ir_file, nhwc_ir_vec: Vec::new() } }
 }
 
 impl Pass for NhwcDumpPass {
     // 运行这个pass
     fn run(&mut self, ctx:&mut NhwcCtx) -> Result<()> { 
-
-        let mut nhwc_ir_vec = vec![];
 
         let (args,symtab,instr_slab,cfg_graph,nhwc_ir_list) = (&ctx.args,&mut ctx.symtab,&mut ctx.nhwc_instr_slab,&mut ctx.cfg_graph, &mut ctx.collected_nhwc_ir);
 
@@ -54,9 +53,9 @@ impl Pass for NhwcDumpPass {
             let cfg_node_struct = node_mut!(at cfg_node in cfg_graph);
             if !( cfg_node_struct.cfg_node_type.is_entry() ||
                 cfg_node_struct.cfg_node_type.is_root()) && cfg_node_struct.op_label_instr.is_none(){
-                    let anonymous_label_symidx = gen_nhwc_cfg::process_label_symbol(cfg_node,ST_ROOT,format!("L{}",anonymous_label_count),symtab)?;
+                    let anonymous_label_symidx = gen_nhwc_cfg::process_label_symbol(cfg_node,ST_ROOT,format!("L{}",anonymous_label_count).leak(),symtab);
                     let anonymous_label= NhwcInstrType::new_label(anonymous_label_symidx).into();
-                    node_mut!(at cfg_node in cfg_graph).push_nhwc_instr(anonymous_label, instr_slab)?;
+                    node_mut!(at cfg_node in cfg_graph).push_nhwc_instr(anonymous_label, instr_slab);
                     anonymous_label_count +=1;
             }
         }
@@ -64,11 +63,11 @@ impl Pass for NhwcDumpPass {
             if node!(at cfg_node in cfg_graph).cfg_node_type.is_basic_block() ||  node!(at cfg_node in cfg_graph).cfg_node_type.is_gather(){
                 if let Some(cfg_node_to_jump) =direct_child_node!(at cfg_node in cfg_graph ret_option){
                     if let Some(label_instr_to_jump) =node!(at cfg_node_to_jump in cfg_graph).op_label_instr{
-                        match &instr!(at label_instr_to_jump in instr_slab)?.instr_type{
+                        match &instr!(at label_instr_to_jump in instr_slab).instr_type{
                             NhwcInstrType::Label { label_symidx } => {
                                 if node!(at cfg_node in cfg_graph).op_jump_instr.is_none(){
                                     let jump_instr_struct = NhwcInstrType::new_jump(label_symidx.clone()).into();
-                                    node_mut!(at cfg_node in cfg_graph).push_nhwc_instr(jump_instr_struct, instr_slab)?;
+                                    node_mut!(at cfg_node in cfg_graph).push_nhwc_instr(jump_instr_struct, instr_slab);
                                 }
                             },
                             _=>{
@@ -82,7 +81,7 @@ impl Pass for NhwcDumpPass {
             if cfg_node == CFG_ROOT|| node!(at cfg_node in cfg_graph).cfg_node_type.is_entry() || direct_child_nodes!(at cfg_node in cfg_graph).len()==0{continue;}
             // println!("{:?}",node!(at cfg_node in cfg_graph));
             let &jump_instr = node!(at cfg_node in cfg_graph).op_jump_instr.as_ref().unwrap();
-            match &instr!(at jump_instr in instr_slab)?.instr_type{
+            match &instr!(at jump_instr in instr_slab).instr_type{
                 NhwcInstrType::Jump { jump_op } => {
                     match jump_op{
                         crate::toolkit::nhwc_instr::JumpOp::Br { cond, t1, t2 } => {
@@ -106,9 +105,9 @@ impl Pass for NhwcDumpPass {
         for cfg_node in dfs_node_vec{
             for &instr in node!(at cfg_node in cfg_graph).iter_all_instrs(){
                 let mut cur_tab ;
-                if instr!(at instr in instr_slab)?.instr_type.is_define_func(){
+                if instr!(at instr in instr_slab).instr_type.is_define_func(){
                     cur_tab = 0;
-                }else if instr!(at instr in instr_slab)?.instr_type.is_label(){
+                }else if instr!(at instr in instr_slab).instr_type.is_label(){
                     cur_tab = 1;
                 }
                 else{
@@ -117,24 +116,8 @@ impl Pass for NhwcDumpPass {
                 if matches!(&node!(at cfg_node in cfg_graph).cfg_node_type,crate::toolkit::cfg_node::CfgNodeType::Root { static_ast_nodes: _ }){
                     cur_tab = 0;
                 }
-                nhwc_ir_vec.push((instr,cur_tab));
+                self.nhwc_ir_vec.push((instr,cur_tab));
                 nhwc_ir_list.push(instr)
-            }
-        }
-        if self.is_gen_nhwc_ir_file{
-            
-            // let mut f =fs::File::create(args.input.file_stem().unwrap().to_string_lossy().to_string() + ".nhwc")?;
-            let mut f =fs::File::create(args.output.file_stem().unwrap().to_string_lossy().to_string() + ".nhwc")?;
-            writeln!(f,"# input: {:?}",args.input)?;
-            for &(instr,cur_tab) in nhwc_ir_vec.iter(){
-                // instr_mut!(at instr in instr_slab)?.text.clear();
-                
-                writeln!(f,"{}{:?}","    ".repeat(cur_tab),instr!(at instr in instr_slab)?)?;
-                // if let InstrType::Jump{ jump_op } = &instr!(at instr in instr_slab)?.instr_type {
-                //     if jump_op.is_ret(){
-                //         cur_tab -= 1;
-                //     }
-                // }
             }
         }
         
@@ -145,5 +128,26 @@ impl Pass for NhwcDumpPass {
 
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "NhwcCollectPass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        if self.is_gen_nhwc_ir_file{
+            
+            let (args,symtab,instr_slab,cfg_graph,nhwc_ir_list) = (&ctx.args,&mut ctx.symtab,&mut ctx.nhwc_instr_slab,&mut ctx.cfg_graph, &mut ctx.collected_nhwc_ir);
+
+            // let mut f =fs::File::create(args.input.file_stem().unwrap().to_string_lossy().to_string() + ".nhwc")?;
+            let mut f =fs::File::create(args.output.file_stem().unwrap().to_string_lossy().to_string() + ".nhwc").unwrap();
+            writeln!(f,"# input: {:?}",args.input);
+            for &(instr,cur_tab) in self.nhwc_ir_vec.iter(){
+                // instr_mut!(at instr in instr_slab)?.text.clear();
+                
+                writeln!(f,"{}{:?}","    ".repeat(cur_tab as usize),instr!(at instr in instr_slab)).unwrap();
+                // if let InstrType::Jump{ jump_op } = &instr!(at instr in instr_slab)?.instr_type {
+                //     if jump_op.is_ret(){
+                //         cur_tab -= 1;
+                //     }
+                // }
+            }
+        }
+    }
 }
 

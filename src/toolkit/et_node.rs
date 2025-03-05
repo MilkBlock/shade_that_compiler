@@ -709,23 +709,23 @@ impl Debug for EtNode {
 }
 
 impl EtNode {
-    pub fn get_type(&self) -> Result<&Type>{ if self.ty.is_none(){ return Err(anyhow!("have no ty field")) }else { Ok(self.ty.as_ref().unwrap()) }}
-    pub fn get_mut_type(&mut self) -> Result<&mut Type>{ if self.ty.is_none(){ return Err(anyhow!("have no ty field")) }else { Ok(self.ty.as_mut().unwrap()) }}
+    pub fn get_type(&self) -> &Type{ if self.ty.is_none(){ panic!("have no ty field") }else { self.ty.as_ref().unwrap() }}
+    pub fn get_mut_type(&mut self) -> &mut Type{ if self.ty.is_none(){ panic!("have no ty field") }else { self.ty.as_mut().unwrap() }}
     pub fn add_type(&mut self, ty:Type) {self.ty = Some(ty)}
-    pub fn get_dims(&self) -> Result<&Vec<Option<RcSymIdx>>>{ if self.dims.is_none(){ return Err(anyhow!("have no dims field")) }else { Ok(self.dims.as_ref().unwrap()) }}
-    pub fn get_mut_dims(&mut self) -> Result<&mut Vec<Option<RcSymIdx>>>{ if self.dims.is_none(){ return Err(anyhow!("have no dims field")) }else { Ok(self.dims.as_mut().unwrap()) }}
+    pub fn get_dims(&self) -> &Vec<Option<RcSymIdx>>{ if self.dims.is_none(){ panic!("have no dims field") }else { self.dims.as_ref().unwrap() }}
+    pub fn get_mut_dims(&mut self) -> &mut Vec<Option<RcSymIdx>>{ if self.dims.is_none(){ panic!("have no dims field") }else { self.dims.as_mut().unwrap() }}
     pub fn add_dims(&mut self,dims:Vec<Option<RcSymIdx>>) {self.dims = Some(dims)}
     pub fn has_dims(&self) -> bool {self.dims.is_some()}
     pub fn has_type(&self) -> bool {self.ty.is_some()}
     pub fn load_ast_node_text(&mut self, ast_tree:&AstTree) -> Result<()> { self.et_node_type.load_ast_node_text(ast_tree) }
-    pub fn name_text(&self) -> String{
+    pub fn name_text(&self) -> &'static str{
         match &self.et_node_type{
             EtNodeType::Operator { op, ast_node, text, op_rc_symidx: op_symidx } => todo!(),
             EtNodeType::Literal { rc_literal_symidx: const_sym_idx, ast_node, text } => {
-                const_sym_idx.as_ref_borrow().symbol_name.clone()
+                const_sym_idx.as_ref_borrow().symbol_name
             },
             EtNodeType::Symbol { rc_symidx: sym_idx, ast_node, text, decldef_def_or_use } => {
-                sym_idx.as_ref_borrow().symbol_name.clone()
+                sym_idx.as_ref_borrow().symbol_name
             },
             EtNodeType::Separator { ast_node, text } => todo!(),
         }

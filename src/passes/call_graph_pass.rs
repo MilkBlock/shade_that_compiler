@@ -23,10 +23,6 @@ impl Pass for CallGraphPass {
         let (cfg_graph,symtab,instr_slab,func_call_graph) = (&mut ctx.cfg_graph, &mut ctx.symtab,&mut ctx.nhwc_instr_slab, &mut ctx.call_graph);
         func_call_graph.clear();
         parse_func_call_graph(cfg_graph, symtab, instr_slab, func_call_graph)?;
-        if self.is_gen_png {
-            // let symt = self.op_cfg_graph.unwrap();
-            generate_png_by_graph_multi_tasks(&ctx.call_graph.clone(), "func_call_graph".to_string(), &[Config::Record, Config::Title("func_call_graph".to_string()),Config::RankDirLR],&mut ctx.io_task_list)?;
-        }
         Ok(())
     }
     // 返回pass的描述，具体作用
@@ -34,4 +30,11 @@ impl Pass for CallGraphPass {
 
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "FuncCall Pass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        if self.is_gen_png {
+            // let symt = self.op_cfg_graph.unwrap();
+            generate_png_by_graph_multi_tasks(&ctx.call_graph.clone(), "func_call_graph".to_string(), &[Config::Record, Config::Title("func_call_graph".to_string()),Config::RankDirLR],&mut ctx.io_task_list).unwrap();
+        }
+    }
 }

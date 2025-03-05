@@ -25,11 +25,11 @@ impl<T: Clone> InstrSlab<T>{
     pub fn insert_instr(&mut self,instr:T) -> usize{
         self.instr_slab.insert(instr)
     }
-    pub fn get_instr(&self,idx:usize) -> Result<&T>{
-        self.instr_slab.get(idx).ok_or(anyhow!("在 instr_slab 中找不到对应的instruction"))
+    pub fn get_instr(&self,idx:usize) -> &T{
+        self.instr_slab.get(idx).expect("在 instr_slab 中找不到对应的instruction")
     }
-    pub fn get_mut_instr(&mut self,idx:usize) -> Result<&mut T>{
-        self.instr_slab.get_mut(idx).ok_or(anyhow!("在 instr_slab 中找不到对应的instruction"))
+    pub fn get_mut_instr(&mut self,idx:usize) -> &mut T{
+        self.instr_slab.get_mut(idx).expect("在 instr_slab 中找不到对应的instruction")
     }
     delegate!{
         to self.instr_slab {
@@ -124,7 +124,7 @@ pub struct PhiOp {
 }
 impl PhiOp{
     // 注意要避免重复添加，如果是重复添加则err
-    pub fn push_phi_pair(&mut self,phi_pair_to_insert:PhiPair)->Result<()>{
+    pub fn push_phi_pair(&mut self,phi_pair_to_insert:PhiPair){
         for phi_pair in self.phi_pairs.iter(){
             if phi_pair.symidx == phi_pair_to_insert.symidx {
                 // return Err(anyhow!("对已存在的phi node 执行 push_phi_pair 失败,已经存在phi_pair包含symidx:{:?}",phi_pair.symidx))
@@ -134,7 +134,6 @@ impl PhiOp{
             }
         }
         self.phi_pairs.push(phi_pair_to_insert);
-        Ok(())
     }
     pub fn remove_phi_pair(&mut self,phi_pair_to_insert:PhiPair)->Result<()>{
         let mut idx_to_rm = None;
@@ -571,7 +570,7 @@ impl NhwcInstrType {
     }
 
     pub fn new_breakpoint(symidx:RcSymIdx,breakpoint_args:Vec<BreakpointArg>) -> Self { Self::BreakPoint {symidx ,breakpoint_args } }
-    pub fn new_exit_breakpoint(breakpoint_args:Vec<BreakpointArg>) -> Self { Self::BreakPoint {symidx:SymIdx::new(0, "exit".to_string()).as_rc() , breakpoint_args } }
+    pub fn new_exit_breakpoint(breakpoint_args:Vec<BreakpointArg>) -> Self { Self::BreakPoint {symidx:SymIdx::new(0, "exit").as_rc() , breakpoint_args } }
 
     //自动类型转换
     pub fn new_int2float(int_symidx:RcSymIdx, float_symidx:RcSymIdx) -> Self { Self::TranType { lhs:float_symidx, op:Trans::Sitofp { int_symidx } } }

@@ -267,7 +267,7 @@ pub fn process_compound(cfg_graph:&mut CfgGraph, ast_tree:&AstTree, symtab:&mut 
     // 一开始 没有head也没有 tail
     let mut opt_current_cfg_head_and_tail = None;
     //查找compoundstatement,下找blocklist以及blockitem
-    let blockitemlist_node = find!(rule RULE_blockItemList at current_compound_node in ast_tree).expect(format!("unwrap failed at ast_node:{}", current_compound_node).as_str());
+    let blockitemlist_node = find!(rule RULE_blockItemList at current_compound_node in ast_tree).unwrap_or_else(|| panic!("unwrap failed at ast_node:{}", current_compound_node));
     let blockitem_nodes:Vec<u32> = find_nodes!(rule RULE_blockItem at blockitemlist_node in ast_tree);
 
     // 这里 rev 是因为 adj 只能返回  rev 的部分

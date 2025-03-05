@@ -8,9 +8,10 @@ use anyhow::Result;
 #[derive(Debug)]
 pub struct SimulatorDebugPass {
     is_gen_png:bool,detailed:bool,
+    simulator_g : Option<SymTabGraph>,
 }
 impl SimulatorDebugPass {
-    pub fn new(is_gen_png:bool,detailed:bool) -> Self { SimulatorDebugPass {is_gen_png, detailed } }
+    pub fn new(is_gen_png:bool,detailed:bool) -> Self { SimulatorDebugPass {is_gen_png, detailed , simulator_g: None } }
 }
 
 impl Pass for SimulatorDebugPass {
@@ -87,10 +88,7 @@ impl Pass for SimulatorDebugPass {
         // calculate global variables 
         simu.run_global_scope(&ctx.symtab, instr_slab)?;
         simu.set_instr_pos_to_main(instr_slab)?;
-        let simulator_g = debug_simu_run(&mut simu, instr_slab, &ctx.symtab, true)?;
-        if self.is_gen_png{
-            generate_png_by_graph_multi_tasks(&simulator_g.clone(), "simulator_graph".to_string(), &[Config::Record, Config::Rounded, Config::SymTab, Config::Title("simulator_debug_graph".to_string())],&mut ctx.io_task_list)?;
-        }
+        self.simulator_g = Some(debug_simu_run(&mut simu, instr_slab, &ctx.symtab, true)?);
         Ok(())
     }
     // 返回pass的描述，具体作用
@@ -98,6 +96,14 @@ impl Pass for SimulatorDebugPass {
 
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "Simulator Debug Pass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        if self.is_gen_png{
+            generate_png_by_graph_multi_tasks(
+                &self.simulator_g.as_ref().unwrap().clone(), "simulator_graph".to_string(), 
+                &[Config::Record, Config::Rounded, Config::SymTab, Config::Title("simulator_debug_graph".to_string())],&mut ctx.io_task_list).unwrap();
+        }
+    }
 }
 
 pub fn debug_simu_run(simu:&mut Simulator, instr_slab:&InstrSlab<NhwcInstr>, src_symtab:&SymTab, is_detailed_info:bool) -> Result<SymTabGraph>{

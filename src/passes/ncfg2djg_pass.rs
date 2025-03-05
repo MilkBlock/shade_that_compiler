@@ -11,12 +11,6 @@ impl Pass for Ncfg2DjgPass {
     // 运行这个pass
     fn run(&mut self, ctx:&mut NhwcCtx) -> Result<()> { 
         parse_ncfg2dj_graph(&mut ctx.cfg_graph, &mut ctx.dj_graph)?;
-        if self.is_ncfg_png{
-            generate_png_by_graph_multi_tasks(&ctx.dj_graph.clone(), "dj_graph".to_string(),&[Config::Record, Config::Rounded, Config::Title("nhwc_cfg_graph".to_string()), Config::NodeIndexLabel],&mut ctx.io_task_list)?
-        }
-        if self.is_ncfg_png{
-            generate_png_by_graph_multi_tasks(&ctx.cfg_graph.clone(), "nhwc_cfg_graph".to_string(),&[Config::Record, Config::Rounded, Config::Title("nhwc_cfg_graph".to_string()), Config::NodeIndexLabel, Config::CfgBlock],&mut ctx.io_task_list )?
-        }
         Ok(()) 
     }
     // 返回pass的描述，具体作用
@@ -24,4 +18,13 @@ impl Pass for Ncfg2DjgPass {
 
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "Ncfg2DjgPass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        if self.is_ncfg_png{
+            generate_png_by_graph_multi_tasks(&ctx.dj_graph.clone(), "dj_graph".to_string(),&[Config::Record, Config::Rounded, Config::Title("nhwc_cfg_graph".to_string()), Config::NodeIndexLabel],&mut ctx.io_task_list).unwrap();
+        }
+        if self.is_ncfg_png{
+            generate_png_by_graph_multi_tasks(&ctx.cfg_graph.clone(), "nhwc_cfg_graph".to_string(),&[Config::Record, Config::Rounded, Config::Title("nhwc_cfg_graph".to_string()), Config::NodeIndexLabel, Config::CfgBlock],&mut ctx.io_task_list ).unwrap();
+        }
+    }
 }

@@ -31,12 +31,12 @@ pub fn parse_ncfg2dj_graph(cfg_graph:&mut CfgGraph,dj_graph:&mut DjGraph)->Resul
     }
     let dominators = simple_fast(&*cfg_graph, node_index(CFG_ROOT as usize));
     for &cfg_node in &cfg_nodes{
-        let &dj_node = node!(at cfg_node in cfg_graph).get_cor_dj_node()?;
+        let &dj_node = node!(at cfg_node in cfg_graph).get_cor_dj_node();
         match dominators.immediate_dominator(node_index(cfg_node as usize)){
             Some(parent) => {
                 // debug_info_red!("{:?}",parent);
                 let cfg_parent = parent.index() as u32;
-                let &dj_parent_node = node!(at cfg_parent in cfg_graph).get_cor_dj_node()?;
+                let &dj_parent_node = node!(at cfg_parent in cfg_graph).get_cor_dj_node();
                 add_edge!({DjEdge::new_dom()} from dj_parent_node to dj_node in dj_graph);
             },
             None => {
@@ -55,7 +55,7 @@ pub fn parse_ncfg2dj_graph(cfg_graph:&mut CfgGraph,dj_graph:&mut DjGraph)->Resul
     for cfg_edge_idx in cfg_edge_indices{
         let (cfg_node_src,cfg_node_target )= cfg_graph.edge_endpoints(cfg_edge_idx)
             .map(|(x,y)| (x.index() as u32, y.index() as u32)).unwrap();
-        let (&dj_node_src,&dj_node_target) = (node!(at cfg_node_src in cfg_graph).get_cor_dj_node()? ,node!(at cfg_node_target in cfg_graph).get_cor_dj_node()?);
+        let (&dj_node_src,&dj_node_target) = (node!(at cfg_node_src in cfg_graph).get_cor_dj_node() ,node!(at cfg_node_target in cfg_graph).get_cor_dj_node());
         if !direct_parent_nodes!(at dj_node_target in dj_graph with_predicate {|e|e.weight().is_dom()}).contains(&dj_node_src) {
             add_edge!({DjEdge::new_join()} from dj_node_src to dj_node_target in dj_graph);
             cfg_join_tuples.push((cfg_node_src,cfg_node_target));
@@ -64,20 +64,20 @@ pub fn parse_ncfg2dj_graph(cfg_graph:&mut CfgGraph,dj_graph:&mut DjGraph)->Resul
     // 以上就成功添加了所有join edge，接下来是计算 dominant frontier
 
     for cfg_node in cfg_nodes{
-        let &dj_cor_node = node!(at cfg_node in cfg_graph).get_cor_dj_node()?;
+        let &dj_cor_node = node!(at cfg_node in cfg_graph).get_cor_dj_node();
         let dj_sub_nodes  = get_dj_graph_subtree_nodes(dj_cor_node, dj_graph);
         // debug_info_yellow!("{:?}",dj_sub_nodes);
         for dj_sub_node in dj_sub_nodes{
             let dj_join_targets:Vec<_> = direct_child_nodes!(at dj_sub_node in dj_graph 
                 with_predicate {
                     |e|e.weight().is_join() && 
-                    node!(at {e.target().index() as u32} in dj_graph).get_depth().unwrap() <= node!(at {dj_cor_node} in dj_graph).get_depth().unwrap()
+                    node!(at {e.target().index() as u32} in dj_graph).get_depth() <= node!(at {dj_cor_node} in dj_graph).get_depth()
                 } 
             );
             let cfg_join_targets:Vec<_> = dj_join_targets.iter().map(|&dj_node|node!(at dj_node in dj_graph).cor_cfg_node).collect();
             if !dj_join_targets.is_empty(){
-                node_mut!(at cfg_node in cfg_graph).get_mut_domiance_frontier_cfg_nodes()?.extend(cfg_join_targets);
-                node_mut!(at dj_cor_node in dj_graph).get_mut_domiance_frontier_dj_nodes()?.extend(dj_join_targets);
+                node_mut!(at cfg_node in cfg_graph).get_mut_domiance_frontier_cfg_nodes().extend(cfg_join_targets);
+                node_mut!(at dj_cor_node in dj_graph).get_mut_domiance_frontier_dj_nodes().extend(dj_join_targets);
             }
         }
     }
@@ -113,8 +113,8 @@ pub fn mark_depth(current_depth:u32,cur_node:u32, dj_graph:&mut DjGraph )->Resul
 
 pub fn lca(mut dj_node1:u32,mut dj_node2:u32, dj_graph:&mut DjGraph) -> Result<u32> {
     {
-        let depth_1 = node!(at dj_node1 in dj_graph).get_depth()?;
-        let depth_2 = node!(at dj_node2 in dj_graph).get_depth()?;
+        let depth_1 = node!(at dj_node1 in dj_graph).get_depth();
+        let depth_2 = node!(at dj_node2 in dj_graph).get_depth();
         if  depth_1> depth_2 {
             let bias = depth_1 - depth_2;
             for i in 0..bias {

@@ -16,4 +16,8 @@ impl Pass for Riscv2BinaryPass {
     fn get_desc(&self) -> String { return "pass Riscv2Binary description".to_string(); }
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "Riscv2BinaryPass Pass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        todo!()
+    }
 }

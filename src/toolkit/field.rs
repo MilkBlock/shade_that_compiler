@@ -13,7 +13,7 @@ use super::{ast_node::AstTree, scope_node::ST_ROOT, symbol, symtab::{SymIdx, Wit
 use super::symtab::RcSymIdx;
 use crate::{debug_info_blue, debug_info_green, debug_info_red, node};
 
-pub type Fields = HashMap<&'static str, Box<dyn Field>>;
+pub type Fields = HashMap<*const u8, Box<dyn Field>>;
 pub static TARGET_POINTER_MEM_LEN:usize = 8;
 
 /// 你实现的类型必须继承这个 trait
@@ -94,7 +94,7 @@ impl ArrayEleMap{
         match self.map.get(&offset){
             Some(ele) => Ok(ele),
             None => {
-                Err(anyhow!("在map:{:?}中找不到元素{}",self,offset))
+                panic!("在map:{:?}中找不到元素{}",self,offset)
             },
         }
     }
@@ -102,7 +102,7 @@ impl ArrayEleMap{
         match self.map.get_mut(&offset){
             Some(ele) => Ok(ele),
             None => {
-                Err(anyhow!("在map中找不到元素{}",offset))
+                panic!("在map中找不到元素{}",offset)
             },
         }
     }
@@ -111,16 +111,15 @@ impl ArrayEleMap{
         let &offset = match &offset{
             Value::I32(Some(i)) => i,
             _ => {
-                return Err(anyhow!("add_ele 中 offset 类型不应为 {:?}",val))
+                panic!("add_ele 中 offset 类型不应为 {:?}",val)
             }
         };
         self.map.insert(offset as usize, val);
         Ok(())
     }
     /// insert element by `usize` offset
-    pub fn insert_ele(&mut self,offset:usize,val:Value) -> Result<()>{
+    pub fn insert_ele(&mut self,offset:usize,val:Value) {
         self.map.insert(offset, val);
-        Ok(())
     }
     pub fn iter(&self) -> Iter<usize,Value>{
         self.map.iter()
@@ -175,19 +174,23 @@ impl Value {
     pub fn new_ref(rc_symidx:RcSymIdx, ty:Type) -> Self{
         Self::Ref { rc_symidx, ty }
     }
-    pub fn logical_or(&self,val:&Value) -> Result<Value>{
-        Ok(match (self,val){
+    pub fn logical_or(&self,val:&Value) -> Value{
+        match (self,val){
             (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1((*v1!=0)||(*v2!=0)),
             (Value::I32(Some(v1)), Value::I1(Some(v2))) => Value::new_i1((*v1!=0)||*v2),
             (Value::I1(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1||(*v2!=0)),
             (Value::I1(Some(v1)), Value::I1(Some(v2))) => Value::new_i1(*v1||*v2),
+
+            (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1(*v1!=0 || *v2 != 0.0 ),
+            (Value::F32(Some(v2)), Value::I32(Some(v1))) => Value::new_i1(*v1!=0 || *v2 != 0.0 ),
+
             _ => {
-                return Err(anyhow!("can't logical or {self:?} with {val:?}"))
+                panic!("can't logical or {self:?} with {val:?}")
             }
-        })
+        }
     }
-    pub fn force_to_ty(&self,target_ty:&Type)-> Result<Value>{
-        Ok(match target_ty{
+    pub fn force_to_ty(&self,target_ty:&Type)-> Value{
+        match target_ty{
             Type::I32 => {
                 match &self{
                     Value::I32(_) => self.clone(),
@@ -195,7 +198,7 @@ impl Value {
                         Some(f) => {
                             Value::I32(Some(*f as i32))
                         },
-                        None => {Value::I32(None)},
+                        None => Value::I32(None),
                     },
                     _ => todo!()
                 }
@@ -213,93 +216,102 @@ impl Value {
                 }
             },
             _ => todo!()
-        })
+        }
     }
-    pub fn logical_and(&self,val:&Value) -> Result<Value>{
-        Ok(match (self,val){
+    pub fn logical_and(&self,val:&Value) -> Value{
+        match (self,val){
             (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1((*v1!=0)&&(*v2!=0)),
             (Value::I32(Some(v1)), Value::I1(Some(v2))) => Value::new_i1((*v1!=0)&&*v2),
             (Value::I1(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1&&(*v2!=0)),
+            (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1(*v1!=0 && *v2 != 0.0),
+            (Value::F32(Some(v2)), Value::I32(Some(v1))) => Value::new_i1(*v1!=0 && *v2 != 0.0),
             (Value::I1(Some(v1)), Value::I1(Some(v2))) => Value::new_i1(*v1&&*v2),
             _ => {
-                return Err(anyhow!("can't logical and {self:?} with {val:?}"))
+                panic!("can't logical and {self:?} with {val:?}")
             }
-        })
+        }
     }
-    pub fn logical_eq(&self, val:&Value) -> Result<Value>{
-        Ok(match (self,val){
+    pub fn logical_eq(&self, val:&Value) -> Value{
+        match (self,val){
             (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1==*v2),
             (Value::I1(Some(v1)), Value::I1(Some(v2))) => Value::new_i1(*v1==*v2),
+            (Value::I1(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1 as i32==*v2),
+            (Value::I32(Some(v1)), Value::I1(Some(v2))) => Value::new_i1(*v1 ==*v2 as i32),
             (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1(*v1==*v2),
             _ => {
-                return Err(anyhow!("can't logical eq {self:?} with {val:?}"))
+                panic!("can't logical eq {self:?} with {val:?}")
             }
-        })
+        }
     }
-    pub fn logical_neq(&self, val:&Value) -> Result<Value>{
-        Ok(match (self,val){
+    pub fn logical_neq(&self, val:&Value) -> Value{
+        match (self,val){
             (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1!=*v2),
             (Value::I1(Some(v1)), Value::I1(Some(v2))) => Value::new_i1(*v1!=*v2),
+            (Value::I1(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1 as i32!=*v2),
+            (Value::I32(Some(v1)), Value::I1(Some(v2))) => Value::new_i1(*v1 !=*v2 as i32),
             (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1(*v1!=*v2),
             _ => {
-                return Err(anyhow!("can't logical neq {self:?} with {val:?}"))
+                panic!("can't logical neq {self:?} with {val:?}")
             }
-        })
+        }
     }
-    pub fn less_than(&self,val:&Value) -> Result<Value>{
-        Ok(match (self,val){
+    pub fn less_than(&self,val:&Value) -> Value{
+        match (self,val){
             (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1<*v2),
             (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1((*v1 as f32)<*v2),
             (Value::F32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1<(*v2 as f32)),
             (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1(*v1<*v2),
             _ => {
-                return Err(anyhow!("can't lessthan {self:?} with {val:?}"))
+                panic!("can't lessthan {self:?} with {val:?}")
             }
-        })
+        }
     }
-    pub fn greater_than(&self,val:&Value) -> Result<Value>{
-        Ok(match (self,val){
+    pub fn greater_than(&self,val:&Value) -> Value{
+        match (self,val){
             (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1>*v2),
             (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1((*v1 as f32)>*v2),
             (Value::F32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1>(*v2 as f32)),
             (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1(*v1>*v2),
             _ => {
-                return Err(anyhow!("can't lessthan {self:?} with {val:?}"))
+                panic!("can't lessthan {self:?} with {val:?}")
             }
-        })
+        }
     }
-    pub fn less_than_or_equal(&self,val:&Value) -> Result<Value>{
-        Ok(match (self,val){
+    pub fn less_than_or_equal(&self,val:&Value) -> Value{
+        match (self,val){
             (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1<=*v2),
             (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1((*v1 as f32)<=*v2),
             (Value::F32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1<=(*v2 as f32)),
             (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1(*v1<=*v2),
             _ => {
-                return Err(anyhow!("can't lessthan {self:?} with {val:?}"))
+                panic!("can't lessthan {self:?} with {val:?}")
             }
-        })
+        }
     }
-    pub fn equal(&self,val:&Value) -> Result<Value>{
-        Ok(match (self,val){
+    pub fn equal(&self,val:&Value) -> Value{
+        match (self,val){
             (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1==*v2),
             (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1((*v1 as f32)==*v2),
             (Value::F32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1==(*v2 as f32)),
             (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1(*v1==*v2),
+
+            (Value::I1(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1 as i32 ==*v2),
+            (Value::I32(Some(v2)), Value::I1(Some(v1))) => Value::new_i1(*v1 as i32 ==*v2),
             _ => {
-                return Err(anyhow!("can't lessthan {self:?} with {val:?}"))
+                panic!("can't equal {self:?} with {val:?}")
             }
-        })
+        }
     }
-    pub fn greater_than_or_equal(&self,val:&Value) -> Result<Value>{
-        Ok(match (self,val){
+    pub fn greater_than_or_equal(&self,val:&Value) -> Value{
+        match (self,val){
             (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1>=*v2),
             (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1((*v1 as f32)>=*v2),
             (Value::F32(Some(v1)), Value::I32(Some(v2))) => Value::new_i1(*v1>=(*v2 as f32)),
             (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_i1(*v1>=*v2),
             _ => {
-                return Err(anyhow!("can't lessthan {self:?} with {val:?}"))
+                panic!("can't greaterthan {self:?} with {val:?}")
             }
-        })
+        }
     }
     pub fn new_i32(value:i32) -> Self { Value::I32(Some(value)) }
     pub fn new_f32(value:f32) -> Self { Value::F32(Some(value)) }
@@ -336,7 +348,7 @@ impl Value {
             Value::I32(op) => Ok(op.is_none()),
             Value::F32(op) => Ok(op.is_none()),
             Value::I1(op) => Ok(op.is_none()),
-            _ => Err(anyhow!("无法确认 value:{:?} 是否 unsure ",self)),
+            _ => panic!("无法确认 value:{:?} 是否 unsure ",self),
         }
     }
     pub fn new_i1(value:bool) -> Self { Value::I1(Some(value)) }
@@ -344,42 +356,42 @@ impl Value {
     pub fn new_array(value_map:ArrayEleMap, dims:Vec<RcSymIdx>, ele_ty: Type) -> Self{
         Value::Array { value_map, dims, ele_ty }
     }
-    pub fn trans_to_specific_type(&self,ty:&Type) -> Result<Value>{
+    pub fn trans_to_specific_type(&self,ty:&Type) -> Value{
         match (&self,&ty) {
-            (Value::I32(v), Type::I32) => Ok(Value::new_i32(v.context("没毛病")? as i32)),
-            (Value::I32(v), Type::F32) => Ok(Value::new_f32(v.context("I32 to F32 but not a i32")? as f32)),
-            (Value::I32(_v), Type::I1) => todo!(),
-            (Value::I32(_v), Type::Void) => todo!(),
-            (Value::I32(_v), Type::Label) => todo!(),
-            (Value::F32(v), Type::I32) => Ok(Value::new_i32(v.context("unsure of f32 ")? as i32)),
-            (Value::F32(v), Type::F32) => Ok(Value::new_f32(v.context("没毛病")? as f32)),
-            (Value::F32(_v), Type::I1) => todo!(),
-            (Value::F32(_v), Type::Void) => todo!(),
-            (Value::F32(_v), Type::Label) => todo!(),
-            (Value::I1(v), Type::I32) => Ok(Value::new_i32(v.context("I32 to I1 but not a i1")?.into())),
-            (Value::I1(v), Type::F32) => Ok(Value::new_f32(v.context("F32 to I1 but not a f32")?.into())),
-            (Value::I1(v), Type::I1) => Ok(Value::new_i1(v.context("没毛病")?.into())),
-            (Value::Void, t) => Err(anyhow!("void 类型不能转化为 {:?} 类型",t)),
+            (Value::I32(Some(v)), Type::I32) => Value::new_i32(*v as i32),
+            (Value::I32(Some(v)), Type::F32) => Value::new_f32(*v as f32),
+            (Value::I32(Some(v)), Type::I1) => todo!(),
+            (Value::I32(Some(v)), Type::Void) => todo!(),
+            (Value::I32(Some(v)), Type::Label) => todo!(),
+            (Value::F32(Some(v)), Type::I32) => Value::new_i32(*v as i32),
+            (Value::F32(Some(v)), Type::F32) => Value::new_f32(*v as f32),
+            (Value::F32(Some(v)), Type::I1) => todo!(),
+            (Value::F32(Some(v)), Type::Void) => todo!(),
+            (Value::F32(Some(v)), Type::Label) => todo!(),
+            (Value::I1(Some(v)), Type::I32) => Value::new_i32(Into::into(*v)),
+            (Value::I1(Some(v)), Type::F32) => Value::new_f32((*v).into()),
+            (Value::I1(Some(v)), Type::I1) => Value::new_i1((*v).into()),
+            (Value::Void, t) => panic!("void 类型不能转化为 {:?} 类型",t),
             (Value::Fn { arg_syms: _, rc_ret_sym: _ }, _t) => todo!(),
-            _ => Err(anyhow!("不能将 {:?} 转化为 {:?}",self,ty )),
+            _ => panic!("不能将 {:?} 转化为 {:?}",self,ty ),
         }
     }
     // pub fn as_specific_type(self) -> Self {
 
     // }
-    pub fn from_string_with_specific_type(s:&String,ty:&Type)->Result<Value>{
-        Ok(match &ty{
+    pub fn from_string_with_specific_type(s:&str,ty:&Type)->Value{
+        match &ty{
             Type::I32 => Value::new_i32(
                 match (s.parse().with_context(||format!("when parsing {} to i32",s)),s.starts_with("0x"), s.starts_with("0")) {
                     (Result::Ok(i), false, false) => {
                         i
                     },
                     (_, true, _) => {
-                        i32::from_str_radix(&s.trim_start_matches("0x"), 16)?
+                        i32::from_str_radix(&s.trim_start_matches("0x"), 16).expect("err trans radix 16")
                     },
                     (Result::Ok(i), false, true) => {
                         if i!=0{
-                            i32::from_str_radix(&s.trim_start_matches("0"), 8)?
+                            i32::from_str_radix(&s.trim_start_matches("0"), 8).expect("err trans radix 8")
                         }else {
                             0
                         }
@@ -392,19 +404,19 @@ impl Value {
                 }
             ),
 
-            Type::F32 => Value::new_f32(s.parse().with_context(||format!("when parsing {} to f32",s)).or(Value::parse_hex_float(s))?),
-            Type::I1 => Value::new_i1(s.parse().with_context(||format!("when parsing {} to i1",s))?),
-            Type::Void => Err(anyhow!("不能从string 转化为 Void 类型的value"))?,
-            Type::Label => Err(anyhow!("不能从string 转化为 Label 类型的value"))?,
-            Type::Fn { arg_syms: _, ret_sym: _ } => Err(anyhow!("不能从string 转化为 Fn 类型的value"))?,
-            // Type::Unsure {  } => Err(anyhow!("不能从string 转化为 Unsure 类型的value"))?,
+            Type::F32 => Value::new_f32(s.parse().with_context(||format!("when parsing {} to f32",s)).unwrap_or_else(|_ |Value::parse_hex_float(s))),
+            Type::I1 => Value::new_i1(s.parse().with_context(||format!("when parsing {} to i1",s)).expect("")),
+            Type::Void => panic!("不能从string 转化为 Void 类型的value"),
+            Type::Label => panic!("不能从string 转化为 Label 类型的value"),
+            Type::Fn { arg_syms: _, ret_sym: _ } => panic!("不能从string 转化为 Fn 类型的value"),
+            // Type::Unsure {  } => panic!("不能从string 转化为 Unsure 类型的value"),
             Type::Array { dims, ele_ty} => Value::new_array(ArrayEleMap::new(), unwrap_vec(dims), *ele_ty.clone()),
-            Type::Ptr64 { ty: _ } => Err(anyhow!("不能从string 转化为 Ptr64 类型的value"))?,
-            Type::Ref => Err(anyhow!("不能从string 转化为 Ref 类型的value"))?,
-            Type::Unknown => Err(anyhow!("不能从string 转化为 Unknown 类型的value"))?,
-        })
+            Type::Ptr64 { ty: _ } => panic!("不能从string 转化为 Ptr64 类型的value"),
+            Type::Ref => panic!("不能从string 转化为 Ref 类型的value"),
+            Type::Unknown => panic!("不能从string 转化为 Unknown 类型的value"),
+        }
     }
-    fn parse_hex_float(s: &str) -> Result<f32> {
+    fn parse_hex_float(s: &str) -> f32 {
         let mut parts: Vec<&str> = s.split('p').collect();
         // debug_info_red!("split into {parts:?}");
         if parts.len() !=2{
@@ -412,15 +424,15 @@ impl Value {
             // debug_info_red!("split into {parts:?}");
         }
         if parts.len() != 2 {
-            return Err(anyhow!("float part have multiple power"))
+            panic!("float part have multiple power {}", s)
         }
 
         let float_parts: Vec<&str> = parts[0].trim_start_matches("0x").split('.').collect();
         if float_parts.len() > 2 {
-            return Err(anyhow!("float part have multiple dot"))// 处理非法格式，如多个小数点
+            panic!("float part have multiple dot")// 处理非法格式，如多个小数
         }
 
-        let int_part = if float_parts[0] != ""{ i32::from_str_radix(float_parts[0], 16)? as f32}else{0.};
+        let int_part = if float_parts[0] != ""{ i32::from_str_radix(float_parts[0], 16).unwrap() as f32}else{0.};
 
         let frac_part = if float_parts.len() == 2 {
             let frac_part_str = float_parts[1];
@@ -435,15 +447,14 @@ impl Value {
         };
 
         let base = int_part + frac_part;
-        let exp: i32 = parts[1].parse()?;
-
-        Ok(base * 2f32.powi(exp))
+        let exp: i32 = parts[1].parse().unwrap();
+        base * 2f32.powi(exp)
     }
     pub fn as_i32_to_min_2_power(self) -> Result<Self>{
         match self{
             Value::I32(Some(num)) => {
                 if num < 1 {
-                    return Err(anyhow!("you can't get the min 2 power of negative num {}",num))
+                    panic!("you can't get the min 2 power of negative num {}",num)
                 }
                 let mut i = 0;
                 while num > 2_i32.pow(i){
@@ -451,15 +462,23 @@ impl Value {
                 }
                 Ok(Value::new_i32(2_i32.pow(i)))
             },
-            _ => {Err(anyhow!("you can't get the min 2 power of {:?}",self))}
+            _ => {panic!("you can't get the min 2 power of {:?}",self)}
         }
     }
-    pub fn as_i32(self) -> Result<i32>{
+    pub fn as_i32(&self) -> i32{
         match self{
             Value::I32(Some(num)) => {
-                Ok(num)
+                *num
             },
-            _ => {Err(anyhow!("you can't get the min 2 power of {:?}",self))}
+            _ => {panic!("{:?} can't cast to i32",self)}
+        }
+    }
+    pub fn as_usize(&self) -> usize{
+        match &self{
+            Value::I32(Some(num)) => {
+                *num as usize
+            },
+            _ => {panic!("{:?} can't cast to u32",self)}
         }
     }
 
@@ -475,13 +494,13 @@ impl Value {
                     if 2_usize.pow(i) == num {
                         Ok(i as isize)
                     }else {
-                        Err(anyhow!("can't log {:?} of 2",self))
+                        panic!("can't log {:?} of 2",self)
                     }
                 }else {
-                    Err(anyhow!("negative num"))
+                    panic!("negative num")
                 }
             },
-            _ => {Err(anyhow!("you can't get the min 2 power of {:?}",self))}
+            _ => {panic!("you can't get the min 2 power of {:?}",self)}
         }
     }
 
@@ -499,20 +518,23 @@ impl Value {
             // Value::Unsure {  } => Type::Unsure {  },
         }
     }
-    pub fn adapt(&self, value2:&Value) -> Result<Type> {
+    pub fn adapt(&self, value2:&Value) -> Type {
         Type::arith_adapt(&self.to_type() ,&value2.to_type())
     }
 
-    pub fn from_symidx(symidx:&SymIdx) -> Result<Value>{
-        Ok(Self::from_string_with_specific_type(&symidx.symbol_name, &TypeDiscriminants::new_from_const_str(&symidx.symbol_name).into())?)
+    pub fn from_symidx(symidx:&SymIdx) -> Value{
+        Self::from_string_with_specific_type(&symidx.symbol_name, &TypeDiscriminants::new_from_const_str(&symidx.symbol_name).into())
     }
-    pub fn to_symidx(&self)->Result<SymIdx>{
+    pub fn try_from_symidx(symidx:&SymIdx) -> Value{
+        Self::from_string_with_specific_type(&symidx.symbol_name, &TypeDiscriminants::new_from_const_str(&symidx.symbol_name).into())
+    }
+    pub fn to_symidx(&self)->SymIdx{
         match self{
             Value::I32(op_i32) => {
                 if let Some(i32_value) = op_i32{
-                    Ok(SymIdx::new(ST_ROOT,i32_value.to_string()))
+                    SymIdx::new(ST_ROOT,i32_value.to_string().leak())
                 }else{
-                    Err(anyhow!("i32 {:?} unsure 无法转化为 symidx",self))
+                    panic!("i32 {:?} unsure 无法转化为 symidx",self)
                 }
             },
             Value::F32(op_f32) => {
@@ -521,30 +543,71 @@ impl Value {
                     if !f32_str.contains("."){
                         f32_str.push('.');
                     }
-                    Ok(SymIdx::new(ST_ROOT,f32_str))
+                    SymIdx::new(ST_ROOT,f32_str.to_string().leak())
                 }else{
-                    Err(anyhow!("f32 {:?} unsure 无法转化为 symidx",self))
+                    panic!("f32 {:?} unsure 无法转化为 symidx",self)
                 }
 
             },
             Value::Ref { rc_symidx, ty } => {
-                Ok(rc_symidx.as_ref_borrow().clone())
+                rc_symidx.as_ref_borrow().clone()
             },
             Value::I1(op_i1) => {
                 if let Some(i1_value) = op_i1{
                     match i1_value{
                         true => {
-                            Ok(SymIdx::new(ST_ROOT, "true".to_string()))
+                            SymIdx::new(ST_ROOT, "true")
                         },
                         false => {
-                            Ok(SymIdx::new(ST_ROOT,"false".to_string()))
+                            SymIdx::new(ST_ROOT,"false")
                         },
                     }
                 }else{
-                    Err(anyhow!("f1 {:?} unsure 无法转化为 symidx",self))
+                    panic!("f1 {:?} unsure 无法转化为 symidx",self)
                 }
             }
-            _ => Err(anyhow!("{:?}无法转化为 symidx",self))
+            _ => panic!("{:?}无法转化为 symidx",self)
+        }
+    }
+    pub fn try_to_symidx(&self)->Option<SymIdx>{
+        match self{
+            Value::I32(op_i32) => {
+                if let Some(i32_value) = op_i32{
+                    Some(SymIdx::new(ST_ROOT,i32_value.to_string().leak()))
+                }else{
+                    None
+                }
+            },
+            Value::F32(op_f32) => {
+                if let Some(f32_value) = op_f32{
+                    let mut f32_str = f32_value.to_string();
+                    if !f32_str.contains("."){
+                        f32_str.push('.');
+                    }
+                    Some(SymIdx::new(ST_ROOT,f32_str.leak()))
+                }else{
+                    None
+                }
+
+            },
+            Value::Ref { rc_symidx, ty } => {
+                Some(rc_symidx.as_ref_borrow().clone())
+            },
+            Value::I1(op_i1) => {
+                if let Some(i1_value) = op_i1{
+                    match i1_value{
+                        true => {
+                            Some(SymIdx::new(ST_ROOT, "true"))
+                        },
+                        false => {
+                            Some(SymIdx::new(ST_ROOT,"false"))
+                        },
+                    }
+                }else{
+                    panic!("f1 {:?} unsure 无法转化为 symidx",self)
+                }
+            }
+            _ => panic!("{:?}无法转化为 symidx",self)
         }
     }
     pub fn index_array(&self,offset:usize) -> Result<Value> {
@@ -553,17 +616,17 @@ impl Value {
                 value_map.get_ele_at(offset).cloned()
             },
             _ => {
-                Err(anyhow!("index_array 无法对 非数组类型 使用 {:?}",&self))
+                panic!("index_array 无法对 非数组类型 使用 {:?}",&self)
             }
         }
     }
-    pub fn get_ele_size(&self) -> Result<usize>{
+
+    pub fn get_ele_size(&self) -> usize{
         self.to_type().get_ele_size()
     }
-    pub fn get_mem_len(&self) -> Result<usize>{
+    pub fn get_mem_len(&self) -> usize{
         self.to_type().get_mem_len()
     }
-
 }
 impl Type {
     /// 这个函数接受一个ast_node 和 ast_tree 通过识别 ast_node 来完成基本类型的识别  
@@ -582,30 +645,30 @@ impl Type {
     }
     /// 这个函数接受一个元素类型和各个维度的大小来构建一个数组类型
     /// 但是禁止创建数组的数组
-    pub fn new_array_dims_known(ele_ty:Type,dims:Vec<RcSymIdx>)->Result<Self>{
+    pub fn new_array_dims_known(ele_ty:Type,dims:Vec<RcSymIdx>)->Self{
         match &ele_ty{
-            Type::Fn { arg_syms: _, ret_sym: _ } => Err(anyhow!("无法新建函数类型的数组"))?,
+            Type::Fn { arg_syms: _, ret_sym: _ } => panic!("无法新建函数类型的数组"),
             _=>{}
         }
-        Ok(Type::Array { dims:dims.into_iter().map(|x| Some(x)).collect_vec(), ele_ty: Box::new(ele_ty) })
+        Type::Array { dims:dims.into_iter().map(|x| Some(x)).collect_vec(), ele_ty: Box::new(ele_ty) }
     }
-    pub fn new_array_dims_may_unknown(ele_ty:Type,dims:Vec<Option<RcSymIdx>>)->Result<Self>{
+    pub fn new_array_dims_may_unknown(ele_ty:Type,dims:Vec<Option<RcSymIdx>>)->Self{
         match &ele_ty{
-            Type::Fn { arg_syms: _, ret_sym: _ } => Err(anyhow!("无法新建函数类型的数组"))?,
+            Type::Fn { arg_syms: _, ret_sym: _ } => panic!("无法新建函数类型的数组"),
             _=>{}
         }
-        Ok(Type::Array { dims, ele_ty: Box::new(ele_ty) })
+        Type::Array { dims, ele_ty: Box::new(ele_ty) }
     }
     pub fn new_array_dims_may_unknown_with_dims_2_pow(ele_ty:Type,mut dims:Vec<Option<RcSymIdx>>)->Result<Self>{
         match &ele_ty{
-            Type::Fn { arg_syms: _, ret_sym: _ } => Err(anyhow!("无法新建函数类型的数组"))?,
+            Type::Fn { arg_syms: _, ret_sym: _ } => panic!("无法新建函数类型的数组"),
             _=>{}
         }
         for (idx,op_dim) in &mut dims.iter_mut().rev().enumerate(){
             match op_dim{
                 Some(dim) => {
                     if idx < 2 {
-                        let symidx:SymIdx = Value::from_symidx(&dim.as_ref_borrow())?.as_i32_to_min_2_power()?.to_symidx()?;
+                        let symidx:SymIdx = Value::from_symidx(&dim.as_ref_borrow()).as_i32_to_min_2_power()?.to_symidx();
                         *dim =  symidx.as_rc();
                     }
                 },
@@ -641,23 +704,23 @@ impl Type {
         }
     }
     /// get align of the type, it will return ele align if it is a array
-    pub fn get_align(&self)->Result<usize>{
+    pub fn get_align(&self)->usize{
         match &self{
-            Type::I32 => Ok(4),
-            Type::F32 => Ok(4),
-            Type::I1 => Ok(1),
-            Type::Void => Err(anyhow!("can't get alignment of void type {:?}",self)),
-            Type::Label => Err(anyhow!("can't get alignment of label type {:?}",self)),
-            Type::Array { dims: _, ele_ty: ty } => Ok(ty.get_align()?),
-            Type::Fn { arg_syms: _, ret_sym: _ } =>Err(anyhow!("can't get alignment of func type {:?}",self)),
-            Type::Ptr64 { ty: _ } => Ok(8),
-            Type::Ref => Err(anyhow!("can't get align of Ref ty")),
-            Type::Unknown => Err(anyhow!("can't get align of unknown")),
+            Type::I32 => 4,
+            Type::F32 => 4,
+            Type::I1 => 1,
+            Type::Void => panic!("can't get alignment of void type {:?}",self),
+            Type::Label => panic!("can't get alignment of label type {:?}",self),
+            Type::Array { dims: _, ele_ty: ty } => ty.get_align(),
+            Type::Fn { arg_syms: _, ret_sym: _ } =>panic!("can't get alignment of func type {:?}",self),
+            Type::Ptr64 { ty: _ } => 8,
+            Type::Ref => panic!("can't get align of Ref ty"),
+            Type::Unknown => panic!("can't get align of unknown"),
         }
     }
 
     /// return the size of element if it is an array or else its size 
-    pub fn get_ele_size(&self) -> Result<usize>{
+    pub fn get_ele_size(&self) -> usize{
         match &self{
             Type::Array { dims: _, ele_ty } => {
                 ele_ty.get_mem_len()
@@ -668,18 +731,18 @@ impl Type {
             _ => self.get_mem_len(),
         }
     }
-    pub fn get_size(&self) -> Result<usize>{
+    pub fn get_size(&self) -> usize{
         match &self{
-            Type::I32 => Ok(4),
-            Type::F32 => Ok(4),
-            Type::I1 => Ok(1),
-            Type::Void => Err(anyhow!("can't get alignment of void type {:?}",self)),
-            Type::Label => Err(anyhow!("can't get alignment of label type {:?}",self)),
-            Type::Array { dims: _, ele_ty: ty } => Ok(ty.get_align()?),
-            Type::Fn { arg_syms: _, ret_sym: _ } =>Err(anyhow!("can't get alignment of func type {:?}",self)),
-            Type::Ptr64 { ty: _ } => Ok(8),
-            Type::Ref => Err(anyhow!("can't get align of Ref ty")),
-            Type::Unknown => Err(anyhow!("can't get align of unknown")),
+            Type::I32 => 4,
+            Type::F32 => 4,
+            Type::I1 => 1,
+            Type::Void => panic!("can't get alignment of void type {:?}",self),
+            Type::Label => panic!("can't get alignment of label type {:?}",self),
+            Type::Array { dims: _, ele_ty: ty } => ty.get_align(),
+            Type::Fn { arg_syms: _, ret_sym: _ } =>panic!("can't get alignment of func type {:?}",self),
+            Type::Ptr64 { ty: _ } => 8,
+            Type::Ref => panic!("can't get align of Ref ty"),
+            Type::Unknown => panic!("can't get align of unknown"),
         }
     }
     pub fn get_ele_ty(&self) -> Type{
@@ -694,27 +757,26 @@ impl Type {
 
     }
 
-    pub fn push_dim(&mut self,dim_symidx:RcSymIdx)->Result<()>{
+    pub fn push_dim(&mut self,dim_symidx:RcSymIdx){
         match self{
-            Type::Fn { arg_syms: _, ret_sym: _ } => Err(anyhow!("无法新建函数类型的数组"))?,
-            Type::Void => Err(anyhow!("无法新建void类型的数组"))?,
-            Type::Label => Err(anyhow!("无法新建label类型的数组"))?,
-            Type::I32 => *self = Type::new_array_dims_known(self.clone(), vec![dim_symidx])?,
-            Type::F32 => *self =Type::new_array_dims_known(self.clone(), vec![dim_symidx])?,
-            Type::I1 => *self =Type::new_array_dims_known(self.clone(), vec![dim_symidx])?,
+            Type::Fn { arg_syms: _, ret_sym: _ } => panic!("无法新建函数类型的数组"),
+            Type::Void => panic!("无法新建void类型的数组"),
+            Type::Label => panic!("无法新建label类型的数组"),
+            Type::I32 => *self = Type::new_array_dims_known(self.clone(), vec![dim_symidx]),
+            Type::F32 => *self =Type::new_array_dims_known(self.clone(), vec![dim_symidx]),
+            Type::I1 => *self =Type::new_array_dims_known(self.clone(), vec![dim_symidx]),
             Type::Array { dims, ele_ty: _ty } => {
                 dims.push(Some(dim_symidx));
             },
             Type::Ptr64 { ty } => {
-                ty.push_dim(dim_symidx)?;
+                ty.push_dim(dim_symidx);
             }
             Type::Ref => todo!(),
             Type::Unknown => todo!(),
         }
-        Ok(())
     }
 
-    pub fn pop_dim(&mut self)->Result<()>{
+    pub fn pop_dim(&mut self){
         match self{
             Type::Array { dims, ele_ty: ty } => {
                 if dims.len()>1{
@@ -726,19 +788,18 @@ impl Type {
             },
             Type::Ptr64 { ty } => {
                 if ty.is_array(){
-                    ty.pop_dim()?;
+                    ty.pop_dim();
                 }else {
                     *self = *ty.clone()
                 }
             },
-            _ => {return Err(anyhow!("{:?} 无法 pop_dim ",self))}
+            _ => {panic!("{:?} 无法 pop_dim ",self)}
         }
-        Ok(())
     }
-    pub fn ptr2arr(&self) -> Result<Type>{
+    pub fn ptr2arr(&self) -> Type{
         match self{
             Type::Ptr64 { ty } => {
-                Ok(Type::Array { dims: 
+                Type::Array { dims: 
                     match ty.as_ref(){
                         Type::Array { dims, ele_ty } => {
                             let mut dims = dims.clone();
@@ -746,7 +807,7 @@ impl Type {
                             dims
                         },
                         Type::Ptr64{ ty } => {
-                            let arr = self.ptr2arr()?;
+                            let arr = self.ptr2arr();
                             match arr{
                                 Type::Array { mut dims, ele_ty } => {
                                     dims.insert(0, None);
@@ -760,19 +821,19 @@ impl Type {
                         }
                     }
                     , ele_ty: Box::new(ty.get_ele_ty())
-                    })
+                    }
             },
             _ => {
-                Err(anyhow!("you can only transform a ptr 2 arr"))
+                panic!("you can only transform a ptr 2 arr")
             }
         }
     }
-    pub fn arr2ptr(&self) -> Result<Type>{
+    pub fn arr2ptr(&self) -> Type{
         match self{
             Type::Array { dims, ele_ty } => {
                 let mut ty = self.clone();
-                ty.pop_dim()?;
-                Ok(Self::Ptr64 { ty:Box::new(ty)  })
+                ty.pop_dim();
+                Self::Ptr64 { ty:Box::new(ty)}
             },
             _ => panic!()
         }
@@ -781,7 +842,7 @@ impl Type {
         match self{
             Type::Array { dims, ele_ty } => {
                 let mut ty = self.clone();
-                ty.pop_dim()?;
+                ty.pop_dim();
                 Ok(Self::Ptr64 { ty:Box::new(ty)  })
             },
             Type::Ptr64 { ty } => {
@@ -792,42 +853,65 @@ impl Type {
     }
 
     /// self could be an array or ptr
-    pub fn get_array_dim_weight_vec(&self)->Result<Vec<SymIdx>>{
+    pub fn get_array_dim_stride_symidx_vec(&self)->Vec<SymIdx>{
         let ty = if self.is_ptr_64(){
-            self.ptr2arr()?
+            self.ptr2arr()
         }else {
             self.clone()
         };
         match ty{
             Self::Array { dims, ele_ty: _ty }=>{
                 let mut v1 = Value::new_i32(1);
-                let mut weighted_dims = vec![v1.to_symidx()?];
+                let mut weighted_dims = vec![v1.to_symidx()];
                 for dim_symidx in dims.get(1..dims.len()).unwrap().iter().rev(){
-                    let v2 = Value::from_string_with_specific_type(&dim_symidx.as_ref().unwrap().as_ref_borrow().symbol_name, &Type::I32)?;
+                    let v2 = Value::from_string_with_specific_type(&dim_symidx.as_ref().unwrap().as_ref_borrow().symbol_name, &Type::I32);
                     debug_info_blue!(" v2 is  {:?}",v2);
-                    v1 = (v1*v2)?;
-                    weighted_dims.push(v1.to_symidx()?)
+                    v1 = v1*v2;
+                    weighted_dims.push(v1.to_symidx())
                 }
                 weighted_dims.reverse();
                 debug_info_blue!("weight vec calcuated is {:?}",weighted_dims);
-                Ok(weighted_dims)
+                weighted_dims
             },
-            _=> {Err(anyhow!("get_array_dim_weight_vec 仅能对 array type 使用，无法根据给定type:{:?}给出",self))}
+            _=> {panic!("get_array_dim_weight_vec 仅能对 array type 使用，无法根据给定type:{:?}给出",self)}
+        }
+    }
+    pub fn get_array_dim_stride_usize_vec(&self)->Vec<usize>{
+        let ty = if self.is_ptr_64(){
+            self.ptr2arr()
+        }else {
+            self.clone()
+        };
+        match ty{
+            Self::Array { dims, ele_ty: _ty }=>{
+                let mut v1 = Value::new_i32(1);
+                let mut weighted_dims = vec![v1.as_usize()];
+                for dim_symidx in dims.get(1..dims.len()).unwrap().iter().rev(){
+                    let v2 = Value::from_string_with_specific_type(&dim_symidx.as_ref().unwrap().as_ref_borrow().symbol_name, &Type::I32);
+                    debug_info_blue!(" v2 is  {:?}",v2);
+                    v1 = v1*v2;
+                    weighted_dims.push(v1.as_usize())
+                }
+                weighted_dims.reverse();
+                debug_info_blue!("weight vec calcuated is {:?}",weighted_dims);
+                weighted_dims
+            },
+            _=> {panic!("get_array_dim_weight_vec 仅能对 array type 使用，无法根据给定type:{:?}给出",self)}
         }
 
     }
     pub fn get_array_dim(&self)->Result<&Vec<Option<RcSymIdx>>>{
         match &self{
-            Type::I32 => Err(anyhow!("can't get dim from i32")),
-            Type::F32 => Err(anyhow!("can't get dim from f32")),
-            Type::I1 => Err(anyhow!("can't get dim from i1")),
-            Type::Void => Err(anyhow!("can't get dim from void")),
-            Type::Label => Err(anyhow!("can't get dim from label")),
-            Type::Ref => Err(anyhow!("can't get dim from ref")),
-            Type::Ptr64 { ty } => Err(anyhow!("can't get dim from ptr64")),
+            Type::I32 => panic!("can't get dim from i32"),
+            Type::F32 => panic!("can't get dim from f32"),
+            Type::I1 => panic!("can't get dim from i1"),
+            Type::Void => panic!("can't get dim from void"),
+            Type::Label => panic!("can't get dim from label"),
+            Type::Ref => panic!("can't get dim from ref"),
+            Type::Ptr64 { ty } => panic!("can't get dim from ptr64"),
             Type::Array { dims, ele_ty } => Ok(dims),
-            Type::Fn { arg_syms, ret_sym } => Err(anyhow!("can't get dim from fn")),
-            Type::Unknown => Err(anyhow!("can't get dim from unknown")),
+            Type::Fn { arg_syms, ret_sym } => panic!("can't get dim from fn"),
+            Type::Unknown => panic!("can't get dim from unknown"),
         }
     }
 
@@ -853,84 +937,84 @@ impl Type {
                 //         .collect_vec();
                 //     Ok(Type::Array { dims:dims.into_iter().map(|x| Some(x)).collect_vec(), ele_ty  })
                 // } else {
-                //     Err(anyhow!("无法识别为 type: {:?}",ty_str))
+                //     panic!("无法识别为 type: {:?}",ty_str)
                 // }
             }
         }
     }
     /// return the length of ty if it's an array or else 1
-    pub fn get_ele_len(&self) -> Result<usize>{
+    pub fn get_ele_len(&self) -> usize{
         match self{
             Type::Array { dims, ele_ty: _ } => {
                 let array_size:usize = dims.iter()
                     .map(|d|{let ans:usize = d.as_ref().unwrap().as_ref_borrow().symbol_name.parse().unwrap();ans}).product() ;
-                Ok(array_size)
+                array_size
             },
             _ => {
-                Ok(1)
+                1
             }
         }
     }
 
-    pub fn get_mem_len(&self)->Result<usize>{
+    pub fn get_mem_len(&self)->usize{
         match &self{
-            Type::I32 => Ok(4),
-            Type::F32 => Ok(4),
-            Type::I1 => Ok(1),
+            Type::I32 => 4,
+            Type::F32 => 4,
+            Type::I1 => 1,
             Type::Void => todo!(),
             Type::Label => todo!(),
-            Type::Array { dims: _, ele_ty: ty } => Ok(self.get_ele_len()?*self.get_ele_size()?),
+            Type::Array { dims: _, ele_ty: ty } => self.get_ele_len()*self.get_ele_size(),
             Type::Fn { arg_syms: _, ret_sym: _ } => todo!(),
-            Type::Ptr64 { ty: _ } => Ok(TARGET_POINTER_MEM_LEN),
-            Type::Ref => Err(anyhow!("can't get mem_len of Ref")),
-            Type::Unknown =>Err(anyhow!("can't get mem_len of Unknown")),
+            Type::Ptr64 { ty: _ } => TARGET_POINTER_MEM_LEN,
+            Type::Ref => panic!("can't get mem_len of Ref"),
+            Type::Unknown =>panic!("can't get mem_len of Unknown"),
         }
     }
-    pub fn arith_adapt(ty1:&Type, ty2:&Type) -> Result<Self> {
+    pub fn arith_adapt(ty1:&Type, ty2:&Type) -> Self {
         match (ty1, ty2) {
-            (Type::I32, Type::I32) => Ok(Type::I32),
-            (Type::I32, Type::F32) => Ok(Type::F32),
-            (Type::F32, Type::I32) => Ok(Type::F32),
-            (Type::F32, Type::F32) => Ok(Type::F32),
-            (Type::I32, Type::I1) => Ok(Type::I32),
-            (Type::F32, Type::I1) => Ok(Type::F32),
-            (Type::I1, Type::I32) => Ok(Type::I32),
-            (Type::I1, Type::F32) => Ok(Type::F32),
-            (Type::I1, Type::I1) => Ok(Type::I1),
+            (Type::I32, Type::I32) => Type::I32,
+            (Type::I32, Type::F32) => Type::F32,
+            (Type::F32, Type::I32) => Type::F32,
+            (Type::F32, Type::F32) => Type::F32,
+            (Type::I32, Type::I1) => Type::I32,
+            (Type::F32, Type::I1) => Type::F32,
+            (Type::I1, Type::I32) => Type::I32,
+            (Type::I1, Type::F32) => Type::F32,
+            (Type::I1, Type::I1) => Type::I1,
             (Type::Ptr64 { ty:ty1 }, Type::Ptr64 { ty:ty2 }) => Type::arith_adapt(ty1, ty2),
             (Type::Ptr64 { ty:ty1 },  ty2) => Type::arith_adapt(ty1, ty2),
             (ty1, Type::Ptr64 { ty:ty2 }) => Type::arith_adapt(ty1, ty2),
             _ => {
-                Err(anyhow!("{:?}和{:?}不能进行兼容", ty1, ty2))
+                panic!("{:?} and {:?} can't arith_adpat", ty1, ty2)
             }
         }
     }
-    pub fn to_ref_ptr_type(&self) -> Result<Self>{
+    pub fn to_ref_ptr_type(&self) -> Self{
         match self{
-            Type::I32 => Ok(Type::Ptr64 { ty: Box::new(Type::I32)}),
-            Type::F32 => Ok(Type::Ptr64 { ty: Box::new(Type::F32)}),
-            Type::I1 => Ok(Type::Ptr64 { ty: Box::new(Type::I1)}),
-            Type::Void => Ok(Type::Ptr64 { ty: Box::new(Type::Void)}),
+            Type::I32 => Type::Ptr64 { ty: Box::new(Type::I32)},
+            Type::F32 => Type::Ptr64 { ty: Box::new(Type::F32)},
+            Type::I1 => Type::Ptr64 { ty: Box::new(Type::I1)},
+            Type::Void => Type::Ptr64 { ty: Box::new(Type::Void)},
             Type::Label => todo!(),
-            Type::Ptr64 { ty: _ } => Ok(Type::Ptr64 { ty: Box::new(self.clone())}),
-            Type::Array { dims: _, ele_ty: _ty } => Ok({let mut poped_array = self.clone();poped_array.pop_dim()?;Type::Ptr64 { ty: Box::new(poped_array)}}),
-            Type::Fn { arg_syms: _, ret_sym: _ } => Ok(Type::Ptr64 { ty: Box::new(self.clone())}),
-            Type::Ref => Err(anyhow!("ref type can't trans to ptr type")),
+            Type::Ptr64 { ty: _ } => Type::Ptr64 { ty: Box::new(self.clone())},
+            Type::Array { dims: _, ele_ty: _ty } => {let mut poped_array = self.clone();poped_array.pop_dim();Type::Ptr64 { ty: Box::new(poped_array)}},
+            Type::Fn { arg_syms: _, ret_sym: _ } => Type::Ptr64 { ty: Box::new(self.clone())},
+            Type::Ref => panic!("ref type can't trans to ptr type"),
             Type::Unknown => todo!(),
         }
     }
-    pub fn to_deref_ptr_type(&self) -> Result<Self>{
+    pub fn to_deref_ptr_type(&self) -> Self{
         match self{
-            Type::I32 => return Err(anyhow!("{:?}无法被deref_type",self)),
-            Type::F32 => return Err(anyhow!("{:?}无法被deref_type",self)),
-            Type::I1 => return Err(anyhow!("{:?}无法被deref_type",self)),
-            Type::Label => return Err(anyhow!("{:?}无法被deref_type",self)),
-            Type::Void => return Err(anyhow!("{:?}无法被deref_type",self)),
-            Type::Ptr64 { ty } => Ok(*ty.clone()),
-            Type::Array { dims: _, ele_ty: _ty } => return Err(anyhow!("{:?}无法被deref_type",self)),
-            Type::Fn { arg_syms: _, ret_sym: _ } => return Err(anyhow!("{:?}无法被deref_type",self)),
+            Type::I32 => panic!("{:?} can't be deref_type",self),
+            Type::F32 => panic!("{:?} is not  deref_type",self),
+            Type::I1 => panic!("{:?} is not deref_type",self),
+            Type::Label => panic!("{:?} is not deref_type",self),
+            Type::Void => panic!("{:?} is not deref_type",self),
+            Type::Ptr64 { ty } => *ty.clone(),
+            Type::Array { dims: _, ele_ty: _ty } => panic!("{:?}无法被deref_type",self),
+            Type::Fn { arg_syms: _, ret_sym: _ } => panic!("{:?}无法被deref_type",self),
             _ => {
-                Err(anyhow!("can't trans to ref"))
+                panic!("can't trans to ref")
             }
         }
     }
@@ -968,149 +1052,151 @@ impl Debug for Type {
     }
 }
 impl Add for Value{
-    type Output=Result<Value>;
+    type Output=Value;
 
     fn add(self, rhs: Self) -> Self::Output {
-        let pub_ty=self.adapt(&rhs).with_context(||format!("无法得出{:?} 和 {:?}的兼容类型",self,rhs))?;
-        let l_val=self.trans_to_specific_type(&pub_ty)?;
-        let r_val=rhs.trans_to_specific_type(&pub_ty)?;
+        let pub_ty=self.adapt(&rhs);
+        let l_val=self.trans_to_specific_type(&pub_ty);
+        let r_val=rhs.trans_to_specific_type(&pub_ty);
         match (l_val,r_val) {
-            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_i32(v1+v2)),
-            (Value::F32(Some(v1)), Value::F32(Some(v2))) => Ok(Value::new_f32(v1+v2)),
-            (Value::F32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_f32(v1 + (v2 as f32))),
-            (Value::I32(Some(v1)), Value::F32(Some(v2))) => Ok(Value::new_f32((v1 as f32) + v2)),
-            (Value::I1(Some(_v1)), Value::I1(Some(_v2))) => Err(anyhow!("I1 can't add")),
-            (Value::Void, Value::Void) => Err(anyhow!("Void can't add")),
-            (_,_) => Err(anyhow!("can't add")),
+            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i32(v1+v2),
+            (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_f32(v1+v2),
+            (Value::F32(Some(v1)), Value::I32(Some(v2))) => Value::new_f32(v1 + (v2 as f32)),
+            (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_f32((v1 as f32) + v2),
+            (Value::I1(Some(_v1)), Value::I1(Some(_v2))) => panic!("I1 can't add"),
+            (Value::Void, Value::Void) => panic!("Void can't add"),
+            (_,_) => panic!("can't add"),
         }
     }
 }
 impl Sub for Value{
-    type Output=Result<Value>;
+    type Output=Value;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        let pub_ty=self.adapt(&rhs).with_context(||format!("无法得出{:?} 和 {:?}的兼容类型",self,rhs))?;
-        let l_val=self.trans_to_specific_type(&pub_ty)?;
-        let r_val=rhs.trans_to_specific_type(&pub_ty)?;
+        let pub_ty=self.adapt(&rhs);
+        let l_val=self.trans_to_specific_type(&pub_ty);
+        let r_val=rhs.trans_to_specific_type(&pub_ty);
         match (l_val,r_val) {
-            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_i32(v1 - v2)),
-            (Value::F32(Some(v1)), Value::F32(Some(v2))) => Ok(Value::new_f32(v1 - v2)),
-            (Value::F32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_f32(v1 - (v2 as f32))),
-            (Value::I32(Some(v1)), Value::F32(Some(v2))) => Ok(Value::new_f32((v1 as f32) - v2)),
-            (Value::I1(Some(_v1)), Value::I1(Some(_v2))) => Err(anyhow!("I1 can't sub")),
-            (Value::Void, Value::Void) => Err(anyhow!("Void can't sub")),
-            (_,_) => Err(anyhow!("can't sub")),
+            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i32(v1 - v2),
+            (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_f32(v1 - v2),
+            (Value::F32(Some(v1)), Value::I32(Some(v2))) => Value::new_f32(v1 - (v2 as f32)),
+            (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_f32((v1 as f32 - v2)),
+            (Value::I1(Some(_v1)), Value::I1(Some(_v2))) => panic!("I1 can't sub"),
+            (Value::Void, Value::Void) => panic!("Void can't sub"),
+            (_,_) => panic!("can't sub"),
         }
     }
 }
 impl Mul for Value{
-    type Output = Result<Value>;
+    type Output = Value;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        let pub_ty=self.adapt(&rhs).with_context(||format!("无法得出{:?} 和 {:?}的兼容类型",self,rhs))?;
-        let l_val=self.trans_to_specific_type(&pub_ty)?;
-        let r_val=rhs.trans_to_specific_type(&pub_ty)?;
+        let pub_ty=self.adapt(&rhs);
+        let l_val=self.trans_to_specific_type(&pub_ty);
+        let r_val=rhs.trans_to_specific_type(&pub_ty);
         match (l_val,r_val) {
-            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_i32(v1 * v2)),
-            (Value::F32(Some(v1)), Value::F32(Some(v2))) => Ok(Value::new_f32(v1 * v2)),
-            (Value::F32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_f32(v1 * (v2 as f32))),
-            (Value::I32(Some(v1)), Value::F32(Some(v2))) => Ok(Value::new_f32((v1 as f32) * v2)),
-            (Value::I1(Some(_v1)), Value::I1(Some(_v2))) => Err(anyhow!("I1 can't mul")),
-            (Value::Void, Value::Void) => Err(anyhow!("Void can't mul")),
-            (_,_) => Err(anyhow!("can't mul")),
+            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i32(v1 * v2),
+            (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_f32(v1 * v2),
+            (Value::F32(Some(v1)), Value::I32(Some(v2))) => Value::new_f32(v1 * (v2 as f32)),
+            (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_f32((v1 as f32 * v2)),
+            (Value::I1(Some(_v1)), Value::I1(Some(_v2))) => panic!("I1 can't mul"),
+            (Value::Void, Value::Void) => panic!("Void can't mul"),
+            (_,_) => panic!("can't mul"),
         }
     }
 }
 impl Div for Value{
-    type Output = Result<Value>;
+    type Output = Value;
 
     fn div(self, rhs: Self) -> Self::Output {
-        let pub_ty=self.adapt(&rhs).with_context(||format!("无法得出{:?} 和 {:?}的兼容类型",self,rhs))?;
-        let l_val=self.trans_to_specific_type(&pub_ty)?;
-        let r_val=rhs.trans_to_specific_type(&pub_ty)?;
+        let pub_ty=self.adapt(&rhs);
+        let l_val=self.trans_to_specific_type(&pub_ty);
+        let r_val=rhs.trans_to_specific_type(&pub_ty);
         match (l_val,r_val) {
-            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_i32(v1 / v2)),
-            (Value::F32(Some(v1)), Value::F32(Some(v2))) => Ok(Value::new_f32(v1 / v2)),
-            (Value::F32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_f32(v1 / (v2 as f32))),
-            (Value::I32(Some(v1)), Value::F32(Some(v2))) => Ok(Value::new_f32((v1 as f32) / v2)),
-            (Value::I1(Some(_v1)), Value::I1(Some(_v2))) => Err(anyhow!("I1 can't div")),
-            (Value::Void, Value::Void) => Err(anyhow!("Void can't div")),
-            (_,_) => Err(anyhow!("can't div")),
+            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i32(v1 / v2),
+            (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_f32(v1 / v2),
+            (Value::F32(Some(v1)), Value::I32(Some(v2))) => Value::new_f32(v1 / (v2 as f32)),
+            (Value::I32(Some(v1)), Value::F32(Some(v2))) => Value::new_f32((v1 as f32 / v2)),
+            (Value::I1(Some(_v1)), Value::I1(Some(_v2))) => panic!("I1 can't div"),
+            (Value::Void, Value::Void) => panic!("Void can't div"),
+            (_,_) => panic!("can't div"),
         }
     }
 }
 impl Rem for Value{
-    type Output = Result<Value>;
+    type Output = Value;
 
     fn rem(self, rhs: Self) -> Self::Output {
-        let pub_ty=self.adapt(&rhs).with_context(||format!("无法得出{:?} 和 {:?}的兼容类型",self,rhs))?;
-        let l_val=self.trans_to_specific_type(&pub_ty)?;
-        let r_val=rhs.trans_to_specific_type(&pub_ty)?;
+        let pub_ty=self.adapt(&rhs);
+        let l_val=self.trans_to_specific_type(&pub_ty);
+        let r_val=rhs.trans_to_specific_type(&pub_ty);
         match (l_val,r_val) {
-            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_i32(v1 % v2)),
-            (Value::F32(Some(v1)), Value::F32(Some(v2))) => Ok(Value::new_f32(v1 % v2)),
-            (Value::I1(Some(_v1)), Value::I1(Some(_v2))) => Err(anyhow!("I1 can't Rem")),
-            (Value::Void, Value::Void) => Err(anyhow!("Void can't Rem")),
-            (_,_) => Err(anyhow!("can't rem")),
+            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i32(v1 % v2),
+            (Value::F32(Some(v1)), Value::F32(Some(v2))) => Value::new_f32(v1 % v2),
+            (Value::I1(Some(_v1)), Value::I1(Some(_v2))) => panic!("I1 can't Rem"),
+            (Value::Void, Value::Void) => panic!("Void can't Rem"),
+            (_,_) => panic!("can't rem"),
         }
     }
 }
 impl BitAnd for Value{
-    type Output = Result<Value>;
+    type Output = Value;
     fn bitand(self, rhs: Self) -> Self::Output {
-        let pub_ty=self.adapt(&rhs).with_context(||format!("无法得出{:?} 和 {:?}的兼容类型",self,rhs))?;
-        let l_val=self.trans_to_specific_type(&pub_ty)?;
-        let r_val=rhs.trans_to_specific_type(&pub_ty)?;
+        let pub_ty=self.adapt(&rhs);
+        let l_val=self.trans_to_specific_type(&pub_ty);
+        let r_val=rhs.trans_to_specific_type(&pub_ty);
         match (l_val,r_val) {
-            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_i32(v1 & v2)),
-            (Value::F32(Some(_v1)), Value::F32(Some(_v2))) => Err(anyhow!("F32 can't bitand")),
-            (Value::I1(Some(v1)), Value::I1(Some(v2))) => Ok(Value::new_i1(v1 & v2)),
-            (Value::Void, Value::Void) => Err(anyhow!("Void can't bitand")),
-            (_,_) => Err(anyhow!("can't bitand")),
+            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i32(v1 & v2),
+            (Value::F32(Some(_v1)), Value::F32(Some(_v2))) => panic!("F32 can't bitand"),
+            (Value::I1(Some(v1)), Value::I1(Some(v2))) => Value::new_i1(v1 & v2),
+            (Value::Void, Value::Void) => panic!("Void can't bitand"),
+            (_,_) => panic!("can't bitand"),
         }
     }
 }
 impl BitOr for Value{
-    type Output = Result<Value>;
+    type Output = Value;
     fn bitor(self, rhs: Self) -> Self::Output {
-        let pub_ty=self.adapt(&rhs).with_context(||format!("无法得出{:?} 和 {:?}的兼容类型",self,rhs))?;
-        let l_val=self.trans_to_specific_type(&pub_ty)?;
-        let r_val=rhs.trans_to_specific_type(&pub_ty)?;
+        let pub_ty=self.adapt(&rhs);
+        let l_val=self.trans_to_specific_type(&pub_ty);
+        let r_val=rhs.trans_to_specific_type(&pub_ty);
         match (l_val,r_val) {
-            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Ok(Value::new_i32(v1 | v2)),
-            (Value::F32(Some(_v1)), Value::F32(Some(_v2))) => Err(anyhow!("F32 can't bitor")),
-            (Value::I1(Some(v1)), Value::I1(Some(v2))) => Ok(Value::new_i1(v1 | v2)),
-            (Value::Void, Value::Void) => Err(anyhow!("Void can't bitor")),
-            (_,_) => Err(anyhow!("can't bitor ")),
+            (Value::I32(Some(v1)), Value::I32(Some(v2))) => Value::new_i32(v1 | v2),
+            (Value::F32(Some(_v1)), Value::F32(Some(_v2))) => panic!("F32 can't bitor"),
+            (Value::I1(Some(v1)), Value::I1(Some(v2))) => Value::new_i1(v1 | v2),
+            (Value::Void, Value::Void) => panic!("Void can't bitor"),
+            (_,_) => panic!("can't bitor "),
         }
     }
 }
 impl Not for Value{
-    type Output = Result<Value>;
+    type Output = Value;
     fn not(self) -> Self::Output {
         // let pub_ty=self.adapt(&self)?;
         // let l_val=self.to_specific_type(&pub_ty)?;
         match &self {
-            Value::I32(Some(v1)) => Ok(Value::new_i32({
+            Value::I32(Some(v1)) => Value::new_i32({
                 if *v1 == 0 { 1 }else{ 0 } }
-            )),
-            Value::F32(Some(_v1)) => Err(anyhow!("F32 can't logical not")),
-            Value::I1(Some(v1)) => Ok(Value::new_i1(!v1)),
-            Value::Void => Err(anyhow!("Void can't logical not")),
-            _ => Err(anyhow!("can't logical not")),
+            ),
+            Value::F32(Some(v1)) => Value::new_i1(
+                if *v1 == 0.0 { true }else{ false }
+            ),
+            Value::I1(Some(v1)) => Value::new_i1(!v1),
+            Value::Void => panic!("Void can't logical not"),
+            _ => panic!("can't logical not"),
         }
     }
 }
 impl Neg for Value{
-    type Output = Result<Value>;
+    type Output = Value;
     
     fn neg(self) -> Self::Output {
         match &self {
-            Value::I32(Some(v1)) => Ok(Value::new_i32(-v1)),
-            Value::F32(Some(v1)) => Ok(Value::new_f32(-v1)),
-            Value::I1(Some(v1)) => Err(anyhow!("I1 can't neg")),
-            Value::Void => Err(anyhow!("Void 类型无法进行按位非运算")),
-            _ => Err(anyhow!("其他类型无法进行按位非运算")),
+            Value::I32(Some(v1)) => Value::new_i32(-v1),
+            Value::F32(Some(v1)) => Value::new_f32(-v1),
+            Value::I1(Some(v1)) => panic!("I1 can't neg"),
+            Value::Void => panic!("Void 类型无法进行按位非运算"),
+            _ => panic!("其他类型无法进行按位非运算"),
         }
     }
 }
@@ -1128,7 +1214,7 @@ pub fn unwrap_vec<T:Clone>(v:&Vec<Option<T>>)  -> Vec<T>{
     v.clone().into_iter().map(|x| x.unwrap()).collect_vec()
 }
 impl TypeDiscriminants{
-    pub fn new_from_const_str(const_str:&String) -> Self {
+    pub fn new_from_const_str(const_str:&str) -> Self {
         if const_str.contains("true") || const_str.contains("false"){
             TypeDiscriminants::I1
         }else if const_str.contains(".") && (const_str.chars().next().map_or(false, |x|x.is_numeric()|| x=='-' || x=='.')) {
@@ -1175,4 +1261,4 @@ impl From<TypeDiscriminants> for Type{
 //             Type::Unknown => TypeDiscriminants::Unknown,
 //         }
 //     }
-// }
+// 

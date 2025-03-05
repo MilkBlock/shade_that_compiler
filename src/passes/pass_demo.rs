@@ -14,4 +14,8 @@ impl Pass for PassDemo {
 
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "DemoPass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        todo!()
+    }
 }

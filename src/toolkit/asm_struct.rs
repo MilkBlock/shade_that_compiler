@@ -79,7 +79,7 @@ impl AsmSection{
     }
 
     /// generate asm that initialize the value 
-    pub fn apply_value(&mut self,val:&Value) -> Result<()>{
+    pub fn apply_value(&mut self,val:&Value) {
         match val{
             Value::Array { value_map, dims: _, ele_ty:_ } => {
                 // if array
@@ -91,27 +91,25 @@ impl AsmSection{
                 while cur < offset_value_pairs.len(){
                     let (&offset,value) = offset_value_pairs[cur];
                     if offset > last_offset{
-                        self.zero((offset - last_offset - 1)*val.get_ele_size()?);
+                        self.zero((offset - last_offset - 1)*val.get_ele_size());
                     }
-                    self.apply_value(value)?;
+                    self.apply_value(value);
                     last_offset = offset;
                     cur +=1 ;
                 }
-                if last_offset < val.get_mem_len()?{
-                    debug_info_red!("mem_len:{} last_offset:{}",val.get_mem_len()?, last_offset);
-                    self.zero(val.get_mem_len()? - last_offset*val.get_ele_size()?)
+                if last_offset < val.get_mem_len(){
+                    debug_info_red!("mem_len:{} last_offset:{}",val.get_mem_len(), last_offset);
+                    self.zero(val.get_mem_len() - last_offset*val.get_ele_size())
                 }
-                Ok(())
             },
             _ => {
-                match val.get_ele_size()?{
-                    8 => { self.double(Imm::new_literal(val.to_symidx().unwrap_or(SymIdx::new_verbose(0, "0".to_string(), None)).as_rc())) }
-                    4 => { self.word(Imm::new_literal(val.to_symidx().unwrap_or(SymIdx::new_verbose(0, "0".to_string(), None)).as_rc())) }
-                    2 => { self.half(Imm::new_literal(val.to_symidx().unwrap_or(SymIdx::new_verbose(0, "0".to_string(), None)).as_rc())) }
-                    1 => { self.byte(Imm::new_literal(val.to_symidx().unwrap_or(SymIdx::new_verbose(0, "0".to_string(), None)).as_rc())) }
-                    _ => { return Err(anyhow!("unexpected ele size")) }
+                match val.get_ele_size(){
+                    8 => { self.double(Imm::new_literal(val.try_to_symidx().unwrap_or(SymIdx::new_verbose(0, "0", None,None)).as_rc())) }
+                    4 => { self.word(Imm::new_literal(val.try_to_symidx().unwrap_or(SymIdx::new_verbose(0, "0", None,None)).as_rc())) }
+                    2 => { self.half(Imm::new_literal(val.try_to_symidx().unwrap_or(SymIdx::new_verbose(0, "0", None,None)).as_rc())) }
+                    1 => { self.byte(Imm::new_literal(val.try_to_symidx().unwrap_or(SymIdx::new_verbose(0, "0", None,None)).as_rc())) }
+                    _ => { panic!("unexpected ele size") }
                 }
-                Ok(())
             }
         }
     }

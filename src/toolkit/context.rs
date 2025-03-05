@@ -51,9 +51,9 @@ impl NhwcCtx {
             ast_tree:AstTree::new(),
             symtab:{
                 let mut symtab = SymTab::new(); 
-                add_symbol!({SymIdx::new(0, COMPILATION_UNIT.to_string()).into_symbol()} 
+                add_symbol!({SymIdx::new(0, COMPILATION_UNIT).into_symbol()} 
                     with_field ALL_CFG_FUNC_SYMIDX_ENTRY_TUPLES:{vec![]}
-                    with_field TEMP_COUNTER:{0}
+                    with_field TEMP_COUNTER:{1}
                     with_field EXTERNAL_FUNC_SYMIDX_VEC:{vec![]}
                     with_field GLOBAL_VARS:{vec![]}
                 to symtab);
@@ -76,3 +76,5 @@ impl NhwcCtx {
         })
     }
 }
+
+unsafe impl Send for NhwcCtx {}

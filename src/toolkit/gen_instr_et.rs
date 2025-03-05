@@ -93,7 +93,7 @@ pub fn process_arith_et(rc_lhs:&RcSymIdx,rc_a:&RcSymIdx, rc_b:&RcSymIdx,instr:us
 pub fn process_trans_et(rc_lhs:&RcSymIdx,rc_rhs:&RcSymIdx,symtab:&SymTab,instr:usize,rc_symidx_et_node_map:&mut HashMap<RcSymIdx,u32>,instr_et_node_map:&mut BiMap<usize,u32>,scope_tree:&ScopeTree,to_trans_ast:u32,instr_et:&mut EtTree)-> Result<u32>{
     let lhs = rc_lhs.as_ref_borrow();
     let rhs_symidx = rc_rhs.as_ref_borrow();
-    let mut lhs_et_struct:EtNode = EtNodeType::new_trans_to(0, symtab.get(&lhs.to_src_symidx())?.get_type()?).into();
+    let mut lhs_et_struct:EtNode = EtNodeType::new_trans_to(0, symtab.get(&lhs.to_src_symidx()).get_type()).into();
     lhs_et_struct.equivalent_symidx_vec.push(rc_lhs.clone());
     let lhs_et_node = add_node!({lhs_et_struct} to instr_et);
     instr_et_node_map.insert(instr, lhs_et_node);
@@ -125,7 +125,7 @@ use crate::{instr, reg_field_for_struct};
 pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut EtTree, symtab:&SymTab, rc_symidx_et_node_map:&mut HashMap<RcSymIdx,u32>, instr_et_node_bimap:&mut BiMap<usize,u32>, scope_tree:&ScopeTree, instr_slab:&mut InstrSlab<NhwcInstr>) -> Result<()>{
     let instrs:Vec<_>= instrs.collect();
     for instr in instrs{
-        let instr_struct = instr!(at instr in instr_slab)?;
+        let instr_struct = instr!(at instr in instr_slab);
         debug_info_blue!("instr_et {:?}",instr_struct);
         match &instr_struct.instr_type{
             // super::nhwc_instr::NhwcInstrType::Label { label_symidx } => todo!(),
@@ -151,7 +151,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                     }
                 }
                 instr_et_node_bimap.insert(instr, func_et_node);
-                instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(func_et_node);
+                instr_mut!(at instr in instr_slab).add_cor_instr_et_node(func_et_node);
             },
             super::nhwc_instr::NhwcInstrType::DefineVar { var_symidx, vartype, op_value } => { 
                 let mut sym_struct:EtNode = EtNodeType::new_symbol(0, var_symidx.clone(), crate::toolkit::et_node::DeclOrDefOrUse::Use).into();
@@ -159,7 +159,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                 let sym_et_node = add_node!({sym_struct} to instr_et);
                 rc_symidx_et_node_map.insert(var_symidx.clone(), sym_et_node);
                 instr_et_node_bimap.insert(instr,sym_et_node);
-                instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(sym_et_node);
+                instr_mut!(at instr in instr_slab).add_cor_instr_et_node(sym_et_node);
             },
             super::nhwc_instr::NhwcInstrType::Alloc { var_symidx_vec: var_symidx, vartype } => {},
             super::nhwc_instr::NhwcInstrType::Globl { var_symidx, vartype } => todo!(),
@@ -183,7 +183,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                 rc_symidx_et_node_map.insert(rc_lhs.clone(), load_et_node);
                 instr_et_node_bimap.insert(instr,load_et_node);
                 ptr_symidx;
-                instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(load_et_node);
+                instr_mut!(at instr in instr_slab).add_cor_instr_et_node(load_et_node);
             },
             super::nhwc_instr::NhwcInstrType::Store { val_symidx: rc_val_symidx, value_ty, ptr_symidx: rc_ptr_symidx, ptr_ty } => {
                 let ptr_symidx = rc_ptr_symidx.as_ref_borrow();
@@ -219,13 +219,13 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                 rc_symidx_et_node_map.insert(rc_val_symidx.clone(), val_et_node);
                 instr_et_node_bimap.insert(instr,store_et_node);
                 ptr_symidx;
-                instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(store_et_node);
+                instr_mut!(at instr in instr_slab).add_cor_instr_et_node(store_et_node);
             },
             super::nhwc_instr::NhwcInstrType::GetElementPtr { lhs, ptr_symidx: rc_array_or_ptr, array_ty, idx_vec } => {
                 //获取索引
                 //构建数组名称节点
-                let rc_array_or_ptr = if *symtab.get(&rc_array_or_ptr.as_ref_borrow().to_src_symidx())?.get_is_global()? 
-                || symtab.get(&rc_array_or_ptr.as_ref_borrow().to_src_symidx())?.get_type()?.is_array(){
+                let rc_array_or_ptr = if *symtab.get(&rc_array_or_ptr.as_ref_borrow().to_src_symidx()).get_is_global() 
+                || symtab.get(&rc_array_or_ptr.as_ref_borrow().to_src_symidx()).get_type().is_array(){
                     // if it is global array
                     // if it is a local array
                     rc_array_or_ptr.as_ref_borrow().to_src_symidx().as_rc()
@@ -272,7 +272,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                 node_mut!(at last_et_node in instr_et).equivalent_symidx_vec.push(lhs.clone());
                 rc_symidx_et_node_map.insert(lhs.clone(), last_et_node);
                 instr_et_node_bimap.insert(instr,last_et_node);
-                instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(last_et_node);
+                instr_mut!(at instr in instr_slab).add_cor_instr_et_node(last_et_node);
             },
             super::nhwc_instr::NhwcInstrType::Arith { lhs: rc_lhs, rhs } => {
                 let instr_et_node = match rhs{
@@ -396,7 +396,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                         arith_et_node
                     },
                 };
-                instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(instr_et_node);
+                instr_mut!(at instr in instr_slab).add_cor_instr_et_node(instr_et_node);
             },
             super::nhwc_instr::NhwcInstrType::SimpleAssign { lhs: rc_lhs, rhs: rc_rhs, vartype:_ } => {
                 let lhs = rc_lhs.as_ref_borrow();
@@ -422,7 +422,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                 };
                 drop(rhs);
                 drop(lhs);
-                instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(et_node);
+                instr_mut!(at instr in instr_slab).add_cor_instr_et_node(et_node);
             },
             super::nhwc_instr::NhwcInstrType::Call { op_lhs, func_op } => {
                 let call_et_node_struct:EtNode = EtNodeType::new_op_call(0).into();
@@ -455,7 +455,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                             let literal_et_node = add_node_with_edge!({literal_et_struct} with_edge {EtEdgeType::Direct.into()} from call_et_node in instr_et);
                             rc_symidx_et_node_map.insert(arg.clone(), literal_et_node);
                         }else {
-                            let arg_ty = symtab.get(&arg.as_ref_borrow().to_src_symidx())?.get_type()?;
+                            let arg_ty = symtab.get(&arg.as_ref_borrow().to_src_symidx()).get_type();
                             if arg_ty.is_array()||arg_ty.is_ptr_64() {
                                 let mut ptr_et_struct:EtNode = EtNodeType::new_symbol(0, arg.clone(), crate::toolkit::et_node::DeclOrDefOrUse::Use).into();
                                 ptr_et_struct.equivalent_symidx_vec.push(arg.clone());
@@ -468,7 +468,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                     }
                 }
                 instr_et_node_bimap.insert(instr,call_et_node);
-                instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(call_et_node);
+                instr_mut!(at instr in instr_slab).add_cor_instr_et_node(call_et_node);
                 //warning:还没写，忘了
                 // todo!();
             },
@@ -516,7 +516,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
             },
             super::nhwc_instr::NhwcInstrType::Mu { may_use_symidx, may_use_instr} => {
                 let may_use_instr = *may_use_instr;
-                match &instr!(at may_use_instr in instr_slab)?.instr_type{
+                match &instr!(at may_use_instr in instr_slab).instr_type{
                     NhwcInstrType::Load { lhs, ptr_symidx, ptr_ty } => {
                         if let Some(&et_node) = instr_et_node_bimap.get_by_left(&may_use_instr){
                             let may_use_node = if let Some(&may_use_node) = rc_symidx_et_node_map.get(may_use_symidx){
@@ -530,7 +530,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                                 may_use_node
                             };
                             add_edge!({EtEdgeType::Mu.into()} from et_node to may_use_node in instr_et);
-                            instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(may_use_node);
+                            instr_mut!(at instr in instr_slab).add_cor_instr_et_node(may_use_node);
                         }else {
                             panic!();
                         }
@@ -548,7 +548,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                                 may_use_node
                             };
                             add_edge!({EtEdgeType::Mu.into()} from et_node to may_use_node in instr_et);
-                            instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(may_use_node);
+                            instr_mut!(at instr in instr_slab).add_cor_instr_et_node(may_use_node);
                         }else {
                             panic!();
                         }
@@ -561,7 +561,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
             },
             super::nhwc_instr::NhwcInstrType::Chi { lhs, rhs, may_def_instr } => {
                 let may_def_instr = *may_def_instr;
-                match &instr!(at may_def_instr in instr_slab)?.instr_type{
+                match &instr!(at may_def_instr in instr_slab).instr_type{
                     NhwcInstrType::Store { val_symidx, value_ty, ptr_symidx, ptr_ty } => {
                         if let Some(&store_et_node) = instr_et_node_bimap.get_by_left(&may_def_instr){
                             let lhs_et_node = if let Some(&lhs_et_node) = rc_symidx_et_node_map.get(lhs){
@@ -587,7 +587,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                                 ssa_last_version_et_node
                             };
                             add_edge!({EtEdgeType::Direct.into()} from store_et_node to rhs_et_node in instr_et);
-                            instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(lhs_et_node);
+                            instr_mut!(at instr in instr_slab).add_cor_instr_et_node(lhs_et_node);
                         }else {
                             panic!()
                         }
@@ -605,7 +605,7 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                                 ssa_version_et_node
                             };
                             add_edge!({EtEdgeType::Chi.into()} from lhs_global_et_node to store_et_node in instr_et);
-                            instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(lhs_global_et_node);
+                            instr_mut!(at instr in instr_slab).add_cor_instr_et_node(lhs_global_et_node);
                         }else {
                             panic!()
                         }
@@ -623,14 +623,14 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                                 ssa_version_et_node
                             };
                             add_edge!({EtEdgeType::Chi.into()} from lhs_global_et_node to func_et_node in instr_et);
-                            instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(lhs_global_et_node);
+                            instr_mut!(at instr in instr_slab).add_cor_instr_et_node(lhs_global_et_node);
                         }else {
                             panic!()
                         }
 
                     }
                     _ => {
-                        panic!("{:?} is not a store or call or define_func", instr!(at may_def_instr in instr_slab)?)
+                        panic!("{:?} is not a store or call or define_func", instr!(at may_def_instr in instr_slab))
                     }
                 }
 
@@ -639,19 +639,19 @@ pub fn parse_instr_list_to_et(instrs:impl Iterator<Item = usize>, instr_et:&mut 
                 match op{
                     super::nhwc_instr::Trans::Fptosi { float_symidx } => {
                         let et_node =process_trans_et(rc_lhs,float_symidx,symtab, instr, rc_symidx_et_node_map,instr_et_node_bimap,scope_tree, 0,  instr_et)?;
-                        instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(et_node);
+                        instr_mut!(at instr in instr_slab).add_cor_instr_et_node(et_node);
                     },
                     super::nhwc_instr::Trans::Sitofp { int_symidx } => {
                         let et_node =process_trans_et(rc_lhs,int_symidx,symtab, instr, rc_symidx_et_node_map,instr_et_node_bimap,scope_tree, 0,  instr_et)?;
-                        instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(et_node);
+                        instr_mut!(at instr in instr_slab).add_cor_instr_et_node(et_node);
                     },
                     super::nhwc_instr::Trans::Zext { bool_symidx } => {
                         let et_node =process_trans_et(rc_lhs,bool_symidx,symtab, instr, rc_symidx_et_node_map,instr_et_node_bimap,scope_tree, 0,  instr_et)?;
-                        instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(et_node);
+                        instr_mut!(at instr in instr_slab).add_cor_instr_et_node(et_node);
                     },
                     super::nhwc_instr::Trans::Bitcast { rptr_symidx, rptr_type:_, lptr_type:_ } => {
                         let et_node =process_trans_et(rc_lhs,rptr_symidx,symtab, instr, rc_symidx_et_node_map,instr_et_node_bimap,scope_tree, 0,  instr_et)?;
-                        instr_mut!(at instr in instr_slab)?.add_cor_instr_et_node(et_node);
+                        instr_mut!(at instr in instr_slab).add_cor_instr_et_node(et_node);
                     },
                 }
             },
@@ -669,7 +669,7 @@ pub fn process_child_instr_et<'a,'b:'a>(instr_et_node:u32,instr_et:&'b EtTree, s
     let b_etnode = instr_etnode_children[1];
     let rc_a = first_rc_symidx_in_et_node_may_literal(a_etnode, instr_et)?;
     let rc_b = first_rc_symidx_in_et_node_may_literal(b_etnode, instr_et)?;
-    let symidx_type = rc_a.as_ref_borrow().get_ty(&symtab)?;
+    let symidx_type = rc_a.as_ref_borrow().get_ty(&symtab).into_owned();
 
     Ok((rc_a,rc_b,symidx_type))
 }

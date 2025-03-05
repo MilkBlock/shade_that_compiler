@@ -1,4 +1,4 @@
-/// ? 返回下一层找到的第一个rule_id符合的节点，使用这个宏的时候必须确保语境中有ast_tree,node
+///  返回下一层找到的第一个rule_id符合的节点，使用这个宏的时候必须确保语境中有ast_tree,node
 /// ```rust    
 /// let node =3;  // 三号节点是一个 function def
 /// let node_ids= find!(rule RULE_compoundStatement
@@ -138,17 +138,17 @@ macro_rules! direct_child_node {
         $graph
             .neighbors(petgraph::matrix_graph::NodeIndex::from($node))
             .next()
-            .expect(format!("no direct child node of {:?} in {:?}", $graph.node_weight(petgraph::matrix_graph::NodeIndex::from($node)), $graph).as_str())
+            .unwrap_or_else(||panic!("no direct child node of {:?} in {:?}", $graph.node_weight(petgraph::matrix_graph::NodeIndex::from($node)), $graph))
             .index() as u32
     }};
     (at $node:ident in $graph:ident with_predicate $f:block )=> {{
         let v = $crate::direct_child_nodes!(at $node in $graph with_predicate $f);
         if v.len() >1 {
-            return Err(anyhow::anyhow!("node {} have more than one direct_child_node", $node))
+            panic!("node {} have more than one direct_child_node", $node)
         } else if v.len() ==1 {
             v[0]
         }else {
-            return Err(anyhow::anyhow!("node {} have no direct_child_node", $node))
+            panic!("node {} have no direct_child_node", $node)
         }
     }};
     (at $node:ident in $graph:ident ret_option) => {{
@@ -333,7 +333,7 @@ macro_rules! direct_edge {
         $graph
             .edges(petgraph::matrix_graph::NodeIndex::from($node))
             .next()
-            .expect(format!("no direct edge of {:?} in {:?}", $graph.node_weight(petgraph::matrix_graph::NodeIndex::from($node)), $graph).as_str())
+            .unwrap_or_else(||panic!("no direct edge of {:?} in {:?}", $graph.node_weight(petgraph::matrix_graph::NodeIndex::from($node)), $graph))
             .index() as u32
     }};
 }
@@ -398,10 +398,10 @@ macro_rules! add_node_with_edge {
 macro_rules! add_symbol {
     ($sym:ident $(with_field $field_name:ident:$field_value:block )* to $symtab:ident ) => {
         {
-            let symidx = $symtab.add_symbol($sym)?;
+            let symidx = $symtab.add_symbol($sym);
             $(
                 $(if $if_block )? {
-                    let sym =  $symtab.get_mut_symbol(&symidx).unwrap();
+                    let sym =  $symtab.get_mut_symbol(&symidx);
                     paste::paste!{
                     sym.[<add_ $field_name:lower>]($field_value);
                     };
@@ -412,10 +412,10 @@ macro_rules! add_symbol {
     };
     ($sym:block $(with_field $field_name:ident:$field_value:block $(if $if_block:block)?)* to $symtab:ident ) => {
         {
-            let symidx = $symtab.add_symbol($sym)?;
+            let symidx = $symtab.add_symbol($sym);
             $(
             $(if $if_block )? {
-                let sym =  $symtab.get_mut(&symidx.as_ref_borrow()).unwrap();
+                let sym =  $symtab.get_mut(&symidx.as_ref_borrow());
                 paste::paste!{
                     sym.[<add_ $field_name:lower>]($field_value);
                 };
@@ -432,7 +432,7 @@ macro_rules! add_symbol {
             paste::paste!{
                 sym.[<add_ $field_name:lower>]($field_value);
             };)*
-            let symidx = $symtab.add_symbol(sym)?;
+            let symidx = $symtab.add_symbol(sym);
             symidx
         }
     };
@@ -444,7 +444,7 @@ macro_rules! add_symbol {
 macro_rules! add_field {
     (with_field $field_name:ident:{$field:expr} to $symidx:ident in $symtab:ident ) => {
         paste::paste!{
-            $symtab.get_mut(&$symidx.as_ref_borrow())?.[<add_ $field_name:lower>]($field);
+            $symtab.get_mut(&$symidx.as_ref_borrow()).[<add_ $field_name:lower>]($field);
         };
     };
     ($(with_field $field_name:ident:{$field:expr})+ to $symidx:ident in $symtab:ident ) => {
@@ -554,20 +554,14 @@ macro_rules! add_passes {
 macro_rules! downcast_op_any {
     (ref $field_type:ty,$op_field:ident) => {{
         match $op_field {
-            None => anyhow::Result::Err(anyhow::anyhow!("can't find field {} type:{}",stringify!($field_type),stringify!($op_field))),
-            Some(field) => match field.as_any().downcast_ref::<$field_type>() {
-                Some(data) => anyhow::Result::Ok(data),
-                None => anyhow::Result::Err(anyhow::anyhow!(concat!("downcast_ref 这个field ",  "不是", stringify!($field_type), "类型"))),
-            },
+            None => None,
+            Some(field) => field.as_any().downcast_ref::<$field_type>(),
         }
     }};
     (mut $field_type:ty,$op_field_mut:ident) => {{
         match $op_field_mut {
-            None => anyhow::Result::Err(anyhow::anyhow!("can't find field {} {}",stringify!($field_type),stringify!($op_field_mut))),
-            Some(field) => match field.as_any_mut().downcast_mut::<$field_type>() {
-                Some(data) => anyhow::Result::Ok(data),
-                None => anyhow::Result::Err(anyhow::anyhow!(concat!("downcast_mut 这个field ",  "不是", stringify!($field_type), "类型"))),
-            },
+            None => None,
+            Some(field) => field.as_any_mut().downcast_mut::<$field_type>(),
         }
     }};
 }
@@ -597,30 +591,44 @@ macro_rules! reg_field_for_struct {
         impl $struct_name {
             paste::paste!{
             $(
-                pub fn [<get_ $upper_field_name:lower>](&self) -> anyhow::Result<&$field_type>{
-                    let op_field = self.$fields.get($upper_field_name);
-                    $crate::downcast_op_any!(ref $field_type,op_field).with_context(|| format!("{} {:?} downcast_op_any 失败 field_name:{}:{} {} {}",stringify!($struct_name),self,stringify!($upper_field_name),$upper_field_name,file!(),line!()))
+                pub fn [<get_ $upper_field_name:lower>](&self) -> &$field_type{
+                    let op_field = self.$fields.get(&$upper_field_name.as_ptr());
+                    $crate::downcast_op_any!(ref $field_type,op_field).unwrap_or_else(||panic!("can't find field {} type:{}",stringify!($field_type),stringify!($op_field)))
                 }
-                pub fn [<get_mut_ $upper_field_name:lower>](&mut self) -> anyhow::Result<&mut $field_type>{
+                pub fn [<get_mut_ $upper_field_name:lower>](&mut self) -> &mut $field_type{
                     // if stringify!($upper_field_name) == "CUR_REG" {
                     //     println!("mut acess cur_reg of {:?}",self);
                     // }
-                    let op_field_mut = self.$fields.get_mut($upper_field_name);
-                    $crate::downcast_op_any!(mut $field_type,op_field_mut).with_context(|| format!("{} downcast_op_any 失败 field_name:{} {} {} {}",stringify!($struct_name),stringify!($upper_field_name),$upper_field_name,file!(),line!()))
+                    let op_field_mut = self.$fields.get_mut(&$upper_field_name.as_ptr());
+                    $crate::downcast_op_any!(mut $field_type,op_field_mut).unwrap_or_else(||panic!("can't find field {} type:{}",stringify!($field_type),stringify!($op_field)))
+                }
+                pub fn [<get_op_ $upper_field_name:lower>](&self) -> Option<&$field_type>{
+                    // if stringify!($upper_field_name) == "CUR_REG" {
+                    //     println!("mut acess cur_reg of {:?}",self);
+                    // }
+                    let op_field_mut = self.$fields.get(&$upper_field_name.as_ptr());
+                    $crate::downcast_op_any!(ref $field_type,op_field_mut)
+                }
+                pub fn [<get_op_mut_ $upper_field_name:lower>](&mut self) -> Option<&mut $field_type>{
+                    // if stringify!($upper_field_name) == "CUR_REG" {
+                    //     println!("mut acess cur_reg of {:?}",self);
+                    // }
+                    let op_field_mut = self.$fields.get_mut(&$upper_field_name.as_ptr());
+                    $crate::downcast_op_any!(mut $field_type,op_field_mut)
                 }
                 pub fn [<add_ $upper_field_name:lower>](&mut self, field:$field_type) {
                     // if stringify!($upper_field_name) == "CUR_REG" {
                     //     println!("add mut acess cur_reg of {:?}",self);
                     // }
-                    let _op_field = self.$fields.insert($upper_field_name,Box::new(field));
+                    let _op_field = self.$fields.insert($upper_field_name.as_ptr(),Box::new(field));
                     // let op_field_ref = op_field.as_ref();
                     // $crate::downcast_op_any!($field_type,op_field)
                 }
                 pub fn [<has_ $upper_field_name:lower>](&self)->bool{
-                    self.$fields.get($upper_field_name).is_some()
+                    self.$fields.get(&$upper_field_name.as_ptr()).is_some()
                 }
                 pub fn [<remove_ $upper_field_name:lower >](&mut self) {
-                    self.$fields.remove($upper_field_name);
+                    self.$fields.remove(&$upper_field_name.as_ptr());
                 }
 
             )*
@@ -687,7 +695,7 @@ macro_rules! create_lower_string_from_two_ident {
 macro_rules! debug_info_blue{
     ($($t:tt)*) => {{
         use log::trace;
-        // println!("\x1B[34m debuginfo {}\x1B[0m",format!($($t)*))
+        // // println!("\x1B[34m debuginfo {}\x1B[0m",format!($($t)*))
         trace!("{}",format!($($t)*))
     }};
 }
@@ -703,7 +711,7 @@ macro_rules! debug_info_yellow{
 macro_rules! debug_info_green{
     ($($t:tt)*) => {{
         use log::debug;
-        // println!("\x1B[32m debuginfo {}\x1B[0m",format!($($t)*))
+        // // println!("\x1B[32m debuginfo {}\x1B[0m",format!($($t)*))
         debug!("{}",format!($($t)*))
     }};
 }
@@ -711,7 +719,7 @@ macro_rules! debug_info_green{
 macro_rules! debug_info_red{
     ($($t:tt)*) => {{
         use log::warn;
-        // println!("\x1B[31m debuginfo {}\x1B[0m",format!($($t)*))
+        // // println!("\x1B[31m debuginfo {}\x1B[0m",format!($($t)*))
         warn!("{}",format!($($t)*))
     }};
 }

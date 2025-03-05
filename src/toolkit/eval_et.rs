@@ -68,7 +68,7 @@ fn _eval_et(et_tree:&mut EtTree, et_node:u32) {
             }
             match op.eval(&et_ret_symidx_vec,true){
                 Ok(val) => {
-                    let rc_literal_symidx = val.to_symidx().unwrap().as_rc();
+                    let rc_literal_symidx = val.to_symidx().as_rc();
                     let literal_et_node_ty = EtNodeType::new_literal(AST_ROOT, rc_literal_symidx.clone()).into();
                     node_mut!(at et_node in et_tree).et_node_type = literal_et_node_ty;
                     // println!("eval_as {:?} at et_node{et_node}", rc_literal_symidx);
@@ -234,7 +234,7 @@ fn match_x_add_x_mul_const(et_node:u32,et_tree:&mut EtTree) -> Result<bool>{
         let et_node_edge_parent2cur = et_tree.find_edge(NodeIndex::new(et_parent_node as usize), NodeIndex::new(et_node as usize)).unwrap();
         et_tree.edge_weight_mut(et_node_edge_parent2cur).unwrap().et_edge_type = EtEdgeType::Deleted;
         add_edge!({EtEdgeType::Direct.into()} from et_parent_node to  mul_op_node in et_tree);
-        let rc_literal_plus_1 = (Value::from_symidx(&rc_literal_symidx.as_ref_borrow())? +Value::new_i32(1))?.to_symidx()?.as_rc();
+        let rc_literal_plus_1 = (Value::from_symidx(&rc_literal_symidx.as_ref_borrow()) +Value::new_i32(1)).to_symidx().as_rc();
         debug_info_red!("{:?} at et_node {}",rc_literal_plus_1,literal_node);
         node_mut!(at literal_node in et_tree).replace_symidx(rc_literal_plus_1)?;
         node_mut!(at et_node in et_tree).common_eliminated = true;
@@ -333,7 +333,7 @@ fn recursive_replace_const_symbol(et_tree:&mut EtTree,et_node:u32,symtab:&SymTab
                     let initial_scope = scope_node;
 
                     let mut symidx =  rc_init_symidx.as_ref_borrow().clone();
-                    while let Err(_) = symtab.get(&symidx) {
+                    while let Err(_) = symtab.try_get(&symidx) {
                         let scope_node = symidx.scope_node;
                         if scope_node != ST_ROOT{
                             symidx.scope_node = direct_parent_node!(at scope_node in scope_tree );
@@ -343,8 +343,8 @@ fn recursive_replace_const_symbol(et_tree:&mut EtTree,et_node:u32,symtab:&SymTab
                     }
                     // debug_info_green!("replace symidx {}",sym_idx);
                     // if the symidx have its corresponding const symidx
-                    if !symtab.get(&symidx)?.get_type()?.is_array() && symtab.get(&symidx)?.has_const_cor_literal_symidx() {
-                        let literal_symidx = symtab.get(&symidx)?.get_const_cor_literal_symidx()?.clone();
+                    if !symtab.get(&symidx).get_type().is_array() && symtab.get(&symidx).has_const_cor_literal_symidx() {
+                        let literal_symidx = symtab.get(&symidx).get_const_cor_literal_symidx().clone();
                         node_mut!(at et_node in et_tree).et_node_type = EtNodeType::new_literal(*ast_node, literal_symidx.as_rc())
                     }
                 }
@@ -562,54 +562,53 @@ impl ExprOp{
             ExprOp::Mod => {
                 if vec.len()<2 {
                     panic!("can't eval with no enough symidx {:?}",vec);
-                    return Err(anyhow!("can't eval with no enough symidx {:?}",vec));
                 }
             }
             _ => {}
         }
         Ok(match self{
-            ExprOp::Mul => (Value::from_symidx( &vec[0].as_ref_borrow())?*Value::from_symidx( &vec[1].as_ref_borrow())?)?,
-            ExprOp::Add => (Value::from_symidx( &vec[0].as_ref_borrow())?+Value::from_symidx( &vec[1].as_ref_borrow())?)?,
-            ExprOp::Sub => (Value::from_symidx( &vec[0].as_ref_borrow())?-Value::from_symidx( &vec[1].as_ref_borrow())?)?,
-            ExprOp::Div => (Value::from_symidx( &vec[0].as_ref_borrow())?/Value::from_symidx( &vec[1].as_ref_borrow())?)?,
-            ExprOp::LogicalOr => (Value::from_symidx( &vec[0].as_ref_borrow())?.logical_or(&Value::from_symidx( &vec[1].as_ref_borrow())?))?,
-            ExprOp::LogicalAnd => (Value::from_symidx( &vec[0].as_ref_borrow())?.logical_and(&Value::from_symidx( &vec[1].as_ref_borrow())?))?,
-            ExprOp::BitwiseOr => (Value::from_symidx( &vec[0].as_ref_borrow())?|Value::from_symidx( &vec[1].as_ref_borrow())?)?,
-            ExprOp::BitwiseAnd => (Value::from_symidx( &vec[0].as_ref_borrow())?&Value::from_symidx( &vec[1].as_ref_borrow())?)?,
+            ExprOp::Mul => Value::from_symidx( &vec[0].as_ref_borrow())*Value::from_symidx( &vec[1].as_ref_borrow()),
+            ExprOp::Add => Value::from_symidx( &vec[0].as_ref_borrow())+Value::from_symidx( &vec[1].as_ref_borrow()),
+            ExprOp::Sub => Value::from_symidx( &vec[0].as_ref_borrow())-Value::from_symidx( &vec[1].as_ref_borrow()),
+            ExprOp::Div => Value::from_symidx( &vec[0].as_ref_borrow())/Value::from_symidx( &vec[1].as_ref_borrow()),
+            ExprOp::LogicalOr => Value::from_symidx( &vec[0].as_ref_borrow()).logical_or(&Value::from_symidx( &vec[1].as_ref_borrow())),
+            ExprOp::LogicalAnd => Value::from_symidx( &vec[0].as_ref_borrow()).logical_and(&Value::from_symidx( &vec[1].as_ref_borrow())),
+            ExprOp::BitwiseOr => Value::from_symidx( &vec[0].as_ref_borrow())|Value::from_symidx( &vec[1].as_ref_borrow()),
+            ExprOp::BitwiseAnd => Value::from_symidx( &vec[0].as_ref_borrow())&Value::from_symidx( &vec[1].as_ref_borrow()),
 
             ExprOp::NEq => {
                 if is_ssa_form_bool && vec[0] == vec[1]{
                     Value::I1(Some(false))
                 }else {
-                    (Value::from_symidx( &vec[0].as_ref_borrow())?.logical_neq(&Value::from_symidx( &vec[1].as_ref_borrow())?))?
+                    (Value::from_symidx( &vec[0].as_ref_borrow()).logical_neq(&Value::from_symidx( &vec[1].as_ref_borrow())))
                 }
             } ,
             ExprOp::Less => {
                 if is_ssa_form_bool && vec[0] == vec[1]{
                     Value::I1(Some(false))
                 }else {
-                    (Value::from_symidx( &vec[0].as_ref_borrow())?.less_than(&Value::from_symidx( &vec[1].as_ref_borrow())?))?
+                    (Value::from_symidx( &vec[0].as_ref_borrow()).less_than(&Value::from_symidx( &vec[1].as_ref_borrow())))
                 }
             },
             ExprOp::Greater => {
                 if is_ssa_form_bool && vec[0] == vec[1]{
                     Value::I1(Some(false))
                 }else {
-                    (Value::from_symidx( &vec[0].as_ref_borrow())?.greater_than(&Value::from_symidx( &vec[1].as_ref_borrow())?))?
+                    (Value::from_symidx( &vec[0].as_ref_borrow()).greater_than(&Value::from_symidx( &vec[1].as_ref_borrow())))
                 }
             },
             ExprOp::LEq => {
                 if is_ssa_form_bool && vec[0] == vec[1]{
                     Value::I1(Some(true))
                 }else {
-                    (Value::from_symidx( &vec[0].as_ref_borrow())?.less_than_or_equal(&Value::from_symidx( &vec[1].as_ref_borrow())?))?
+                    (Value::from_symidx( &vec[0].as_ref_borrow()).less_than_or_equal(&Value::from_symidx( &vec[1].as_ref_borrow())))
                 }
             },
             ExprOp::GEq => {
                 if is_ssa_form_bool && vec[0] == vec[1]{
                     Value::I1(Some(true))
                 }else {
-                    (Value::from_symidx( &vec[0].as_ref_borrow())?.greater_than_or_equal(&Value::from_symidx( &vec[1].as_ref_borrow())?))?
+                    (Value::from_symidx( &vec[0].as_ref_borrow()).greater_than_or_equal(&Value::from_symidx( &vec[1].as_ref_borrow())))
                 }
             },
             // ExprOp::BitwiseXor => (Value::from_symidx( &vec[0].as_ref_borrow())?^Value::from_symidx( &vec[1].as_ref_borrow())?)?,
@@ -617,21 +616,21 @@ impl ExprOp{
                 if is_ssa_form_bool && vec[0] == vec[1]{
                     Value::I1(Some(true))
                 }else {
-                    (Value::from_symidx(&vec[0].as_ref_borrow())?.equal(&Value::from_symidx( &vec[1].as_ref_borrow())?))?
+                    (Value::from_symidx(&vec[0].as_ref_borrow()).equal(&Value::from_symidx( &vec[1].as_ref_borrow())))
                 }
             },
             ExprOp::Mod => {
-                (Value::from_symidx( &vec[0].as_ref_borrow())?%Value::from_symidx( &vec[1].as_ref_borrow())?)?
+                (Value::from_symidx( &vec[0].as_ref_borrow())%Value::from_symidx( &vec[1].as_ref_borrow()))
             },
             // ExprOp::LShift => (Value::from_symidx( &vec[0].as_ref_borrow())?<<Value::from_symidx( &vec[1].as_ref_borrow())?)?,
             // ExprOp::RShift => (Value::from_symidx( &vec[0].as_ref_borrow())?>>Value::from_symidx( &vec[1].as_ref_borrow())?)?,
-            ExprOp::BitwiseNot => (!Value::from_symidx( &vec[0].as_ref_borrow())?)?, //一元运算符
-            ExprOp::LogicalNot => (!Value::from_symidx( &vec[0].as_ref_borrow())?)?, 
-            ExprOp::Negative => (-Value::from_symidx( &vec[0].as_ref_borrow())?)?,
-            ExprOp::Positive => Value::from_symidx( &vec[0].as_ref_borrow())?,
-            ExprOp::TransToF32 => Value::from_symidx( &vec[0].as_ref_borrow())?.trans_to_specific_type(&Type::F32)?,
-            ExprOp::TransToI32 => Value::from_symidx( &vec[0].as_ref_borrow())?.trans_to_specific_type(&Type::I32)?,
-            ExprOp::TransToI1 => Value::from_symidx( &vec[0].as_ref_borrow())?.trans_to_specific_type(&Type::I1)?,
+            ExprOp::BitwiseNot => !Value::from_symidx( &vec[0].as_ref_borrow()), //一元运算符
+            ExprOp::LogicalNot => !Value::from_symidx( &vec[0].as_ref_borrow()), 
+            ExprOp::Negative => -Value::from_symidx( &vec[0].as_ref_borrow()),
+            ExprOp::Positive => Value::from_symidx( &vec[0].as_ref_borrow()),
+            ExprOp::TransToF32 => Value::from_symidx( &vec[0].as_ref_borrow()).trans_to_specific_type(&Type::F32),
+            ExprOp::TransToI32 => Value::from_symidx( &vec[0].as_ref_borrow()).trans_to_specific_type(&Type::I32),
+            ExprOp::TransToI1 => Value::from_symidx( &vec[0].as_ref_borrow()).trans_to_specific_type(&Type::I1),
             _ => {Err(anyhow!(format!("unsupported operator {:?} for {:?}",self,vec)))?},
         })
     }

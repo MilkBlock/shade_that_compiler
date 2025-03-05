@@ -78,7 +78,7 @@ impl Debug for Imm{
                         write!(f,"{}", symidx.as_ref_borrow())
                     },
                     TypeDiscriminants::F32 => {
-                        let f_val:f32 = match Value::from_string_with_specific_type(&symidx.as_ref_borrow().symbol_name, &Type::F32).unwrap(){
+                        let f_val:f32 = match Value::from_string_with_specific_type(&symidx.as_ref_borrow().symbol_name, &Type::F32){
                             Value::F32(Some(f_val)) => f_val,
                             _ => panic!()
                         };
@@ -808,8 +808,8 @@ pub enum Stores {
     Fsd {rs1:Register ,rs2:Register,imm:Imm},//将一个双精度浮点数（64位）从浮点寄存器存储到内存中。
 }
 impl Stores{
-    pub fn new(size:usize,reg1:Register,reg2:Register, offset:isize, is_f32:bool) -> Result<Self>{
-        Ok(match (size,is_f32){
+    pub fn new(size:usize,reg1:Register,reg2:Register, offset:isize, is_f32:bool) -> Self{
+        match (size,is_f32){
             (8,false)=> {
                 Stores::new_sd(reg1, reg2, Imm::new_literal_isize(offset))
             },
@@ -823,7 +823,7 @@ impl Stores{
                 Stores::new_sb(reg1, reg2, Imm::new_literal_isize(offset))
             },
             (_,false)=> {
-                return Err(anyhow!("unexpected store size {}",size))
+                panic!("unexpected store size {}",size)
             },
             (8,true)=> {
                 Stores::new_fsd(reg1, reg2, Imm::new_literal_isize(offset))
@@ -832,9 +832,9 @@ impl Stores{
                 Stores::new_fsw(reg1, reg2, Imm::new_literal_isize(offset))
             },
             (_,true)=> {
-                return Err(anyhow!("unexpected store size {}",size))
+                panic!("unexpected store size {}",size)
             }
-        })
+        }
     }
 }
 impl Debug for Stores {

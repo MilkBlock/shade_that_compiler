@@ -27,9 +27,6 @@ stoptime:\n\tmv a0, zero\n\ttail _sysy_stoptime\n\n\n";
         let (cfg_graph, nhwc_instr_slab, riscv_instr_slab, src_symtab, asm_structure) = (&mut ctx.cfg_graph, &mut ctx.nhwc_instr_slab, &mut ctx.riscv_instr_slab, &mut ctx.symtab, &mut ctx.asm_structure);
         let mut regtab = RegTab::new();
         let may_err = parse_nhwcir2riscv(cfg_graph, nhwc_instr_slab, riscv_instr_slab, asm_structure, &mut regtab,src_symtab);
-        if self.is_write_s_file{
-            std::fs::write(&ctx.args.output, format!("{}",ctx.asm_structure.dump(self.enable_annotation))).unwrap();
-        }
         may_err
     }
     // 返回pass的描述，具体作用
@@ -37,4 +34,10 @@ stoptime:\n\tmv a0, zero\n\ttail _sysy_stoptime\n\n\n";
 
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "Nhwc2RiscvPass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        if self.is_write_s_file{
+            std::fs::write(&ctx.args.output, format!("{}",ctx.asm_structure.dump(self.enable_annotation))).unwrap();
+        }
+    }
 }

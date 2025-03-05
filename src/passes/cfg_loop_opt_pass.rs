@@ -33,5 +33,9 @@ impl Pass for LoopOptPass {
 
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "LoopOptPass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        
+    }
 }
 

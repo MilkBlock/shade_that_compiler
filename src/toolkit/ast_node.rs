@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{backtrace::{Backtrace, BacktraceStatus}, fmt::Debug};
 
 use petgraph::{
     stable_graph::{NodeIndex, StableDiGraph}, visit::Bfs

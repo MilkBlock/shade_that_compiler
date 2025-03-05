@@ -26,9 +26,6 @@ impl Pass for Cfg2LptPass {
         let loop_tree = &mut ctx.loop_tree;
         let cfg_graph = &mut ctx.cfg_graph;
         parse_cfg2loop_tree(loop_tree, cfg_graph)?;
-        if self.is_gen_png {
-            generate_png_by_graph_multi_tasks(&ctx.loop_tree.clone(), "loop_tree".to_string(), &[Config::Record, Config::Title("loop_tree".to_string()),Config::NodeIndexLabel],&mut ctx.io_task_list)?;
-        }
         Ok(())
     }
     // 返回pass的描述，具体作用
@@ -36,4 +33,10 @@ impl Pass for Cfg2LptPass {
 
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "Cfg2LptPass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        if self.is_gen_png {
+            generate_png_by_graph_multi_tasks(&ctx.loop_tree.clone(), "loop_tree".to_string(), &[Config::Record, Config::Title("loop_tree".to_string()),Config::NodeIndexLabel],&mut ctx.io_task_list).unwrap();
+        }
+    }
 }

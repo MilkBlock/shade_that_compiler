@@ -34,15 +34,15 @@ impl Pass for DeadCodeEliminationPass {
         for dug_node_idx in def_use_graph.node_indices(){
             let dug_node = dug_node_idx.index() as u32;
             let instr = node!(at dug_node in def_use_graph).instr;
-            match &instr!(at instr in instr_slab)?.instr_type {
+            match &instr!(at instr in instr_slab).instr_type {
                 NhwcInstrType::Call { op_lhs: op_assigned_symidx, func_op } => {
-                    relevant_dug_nodes.push(*instr!(at instr in instr_slab)?.get_dug_cor_def_use_node()?);
+                    relevant_dug_nodes.push(*instr!(at instr in instr_slab).get_dug_cor_def_use_node());
                 },
                 NhwcInstrType::Jump { jump_op:JumpOp::Ret { op_ret_sym} } => {
-                    relevant_dug_nodes.push(*instr!(at instr in instr_slab)?.get_dug_cor_def_use_node()?);
+                    relevant_dug_nodes.push(*instr!(at instr in instr_slab).get_dug_cor_def_use_node());
                 },
                 NhwcInstrType::Jump { jump_op:JumpOp::Br { cond, t1, t2 } } => {
-                    relevant_dug_nodes.push(*instr!(at instr in instr_slab)?.get_dug_cor_def_use_node()?);
+                    relevant_dug_nodes.push(*instr!(at instr in instr_slab).get_dug_cor_def_use_node());
                 }
                 _ => {
                     
@@ -52,47 +52,27 @@ impl Pass for DeadCodeEliminationPass {
         let mut visited_array:Vec<bool> = vec![false; def_use_graph.node_count()];
         for dug_node in relevant_dug_nodes{
             let instr = node!(at dug_node in def_use_graph).instr;
-            debug_info_yellow!(" dfs start from {:?} at dug_node:{}", instr!(at instr in instr_slab)?, dug_node);
+            debug_info_yellow!(" dfs start from {:?} at dug_node:{}", instr!(at instr in instr_slab), dug_node);
             _reverse_dfs_with_predicate(def_use_graph, dug_node, &mut visited_array, &mut vec![], &mut |x| true)
         }
         debug_info_yellow!("{:?}",visited_array.iter().enumerate().collect_vec());
         for dug_node in visited_array.iter().enumerate().filter(|(idx,b)|!*b).map(|(idx,b)| idx as u32){
             debug_info_yellow!("unvisit dug_node {:?}",dug_node);
             let unvisited_instr = node!(at dug_node in def_use_graph).instr;
-            match &instr!(at unvisited_instr in instr_slab)?.instr_type{
+            match &instr!(at unvisited_instr in instr_slab).instr_type{
                 NhwcInstrType::Label { label_symidx } => {},
                 NhwcInstrType::DefineFunc { func_symidx, ret_symidx, args } => {},
                 NhwcInstrType::DefineVar { var_symidx, vartype, op_value } => {},
                 NhwcInstrType::Alloc { var_symidx_vec: var_symidx, vartype } => {},
                 NhwcInstrType::Globl { var_symidx, vartype } => {},
                 _ => {
-                    if instr!(at unvisited_instr in instr_slab)?.get_cfg_instr_idx()?.cfg_node!= CFG_ROOT{
-                        debug_info_yellow!("set instr {} {:?} to nope ",unvisited_instr, instr!(at unvisited_instr in instr_slab)?);
-                        *instr_mut!(at unvisited_instr in instr_slab )? = NhwcInstrType::Nope {  }.into();
+                    if instr!(at unvisited_instr in instr_slab).get_cfg_instr_idx().cfg_node!= CFG_ROOT{
+                        debug_info_yellow!("set instr {} {:?} to nope ",unvisited_instr, instr!(at unvisited_instr in instr_slab));
+                        *instr_mut!(at unvisited_instr in instr_slab ) = NhwcInstrType::Nope {  }.into();
                     }
                 }
             }
         }
-        
-        if self.is_gen_dug_png {
-            // let symt = self.op_cfg_graph.unwrap();
-            for def_use_node in def_use_graph.node_weights_mut(){
-                let instr = def_use_node.instr;
-                if instr!(at instr in instr_slab)?.instr_type.is_nope(){
-                    def_use_node.text += " DELETED";
-                }
-            }
-            generate_png_by_graph_multi_tasks(&ctx.def_use_graph.clone(), "dce_def_use_graph".to_string(), &[Config::Record, Config::Title("dce_def_use_graph".to_string()),Config::RankDirLR],&mut ctx.io_task_list)?;
-        }
-        if self.is_gen_dce_cfg_png {
-            // let symt = self.op_cfg_graph.unwrap();
-            for cfg_node in cfg_graph.node_weights_mut(){
-                cfg_node.text.clear();
-                cfg_node.load_instrs_text(instr_slab)?;
-            }
-            generate_png_by_graph_multi_tasks(&ctx.cfg_graph.clone(), "dce_cfg_graph".to_string(), &[Config::Record, Config::Rounded,  Config::Title("dce_cfg_graph".to_string()),Config::CfgBlock,Config::NodeIndexLabel],&mut ctx.io_task_list)?;
-        }
-
         Ok(()) 
     }
     // 返回pass的描述，具体作用
@@ -100,4 +80,26 @@ impl Pass for DeadCodeEliminationPass {
 
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "DeadCodeElimination Pass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        let (instr_slab,cfg_graph,def_use_graph,symtab,dj_graph, call_graph)= (&mut ctx.nhwc_instr_slab,&mut ctx.cfg_graph,&mut ctx.def_use_graph,&mut ctx.symtab,&ctx.dj_graph, &ctx.call_graph);
+        if self.is_gen_dug_png {
+            // let symt = self.op_cfg_graph.unwrap();
+            for def_use_node in def_use_graph.node_weights_mut(){
+                let instr = def_use_node.instr;
+                if instr!(at instr in instr_slab).instr_type.is_nope(){
+                    def_use_node.text += " DELETED";
+                }
+            }
+            generate_png_by_graph_multi_tasks(&ctx.def_use_graph.clone(), "dce_def_use_graph".to_string(), &[Config::Record, Config::Title("dce_def_use_graph".to_string()),Config::RankDirLR],&mut ctx.io_task_list).unwrap();
+        }
+        if self.is_gen_dce_cfg_png {
+            // let symt = self.op_cfg_graph.unwrap();
+            for cfg_node in cfg_graph.node_weights_mut(){
+                cfg_node.text.clear();
+                cfg_node.load_instrs_text(instr_slab);
+            }
+            generate_png_by_graph_multi_tasks(&ctx.cfg_graph.clone(), "dce_cfg_graph".to_string(), &[Config::Record, Config::Rounded,  Config::Title("dce_cfg_graph".to_string()),Config::CfgBlock,Config::NodeIndexLabel],&mut ctx.io_task_list).unwrap();
+        }
+    }
 }

@@ -14,7 +14,7 @@ impl Pass for CfgDebugPass {
         if self.is_gen_brief_cfg{
             for cfg_node in ctx.cfg_graph.node_weights_mut() {
                 cfg_node.clear_text();
-                cfg_node.load_instrs_text(&ctx.nhwc_instr_slab)?;
+                cfg_node.load_instrs_text(&ctx.nhwc_instr_slab);
             }
             generate_png_by_graph_multi_tasks(&ctx.cfg_graph.clone(), "brief_cfg_graph".to_string(), &[Config::Record, Config::Rounded,  Config::Title("brief_cfg_graph".to_string()),Config::CfgBlock,Config::NodeIndexLabel],&mut ctx.io_task_list)?;
         }
@@ -25,5 +25,9 @@ impl Pass for CfgDebugPass {
 
     // 返回pass的名称
     fn get_pass_name(&self) -> String { return "CfgDebugPass".to_string(); }
+    
+    fn when_finish_or_panic(&mut self, ctx:&mut crate::toolkit::context::NhwcCtx) {
+        
+    }
 }
 

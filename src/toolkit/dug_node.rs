@@ -45,7 +45,7 @@ impl DefUseEdge{
 }
 impl DefUseNode{
     pub fn load_instr_text(&mut self , instr_slab:&InstrSlab<NhwcInstr>){
-        self.text += format!("{:?}", instr_slab.get_instr(self.instr).unwrap()).as_str();
+        self.text += format!("{:?}", instr_slab.get_instr(self.instr)).as_str();
     }
     pub fn new(instr:usize)->Self{
         Self{

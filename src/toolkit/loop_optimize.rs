@@ -11,14 +11,14 @@ pub fn can_get_loop_info(cfg_node:u32,cfg_graph:&mut CfgGraph,instr_slab:&mut In
     let while_loop_node = node!(at cfg_node in cfg_graph);
     let while_instr_vec = &while_loop_node.instrs.instr_vec;
     let comp_instr = while_instr_vec[while_instr_vec.len()-1];
-    let comp_use_rcsymidx = instr!(at comp_instr in instr_slab)?.get_ssa_direct_use_symidx_vec();
-    if !comp_use_rcsymidx[0].as_ref_borrow().is_temp(symtab)? && comp_use_rcsymidx[1].as_ref_borrow().is_literal() {
+    let comp_use_rcsymidx = instr!(at comp_instr in instr_slab).get_ssa_direct_use_symidx_vec();
+    if !comp_use_rcsymidx[0].as_ref_borrow().is_temp() && comp_use_rcsymidx[1].as_ref_borrow().is_literal() {
         let phi_instr_vec = &while_loop_node.clone().phi_instrs.instr_vec;
         for phi_instr in phi_instr_vec{
             let phi_instr = *phi_instr;
-            let phi_def_rcsymidx = instr!(at phi_instr in instr_slab)?.get_ssa_direct_def_symidx_vec()[0];
+            let phi_def_rcsymidx = instr!(at phi_instr in instr_slab).get_ssa_direct_def_symidx_vec()[0];
             //判断比较语句的变量和phi语句的变量是否相同，并且phi语句的use的rcsymidx只有两个
-            let phi_use_rcsymidx_vec = instr!(at phi_instr in instr_slab)?.get_ssa_direct_use_symidx_vec();
+            let phi_use_rcsymidx_vec = instr!(at phi_instr in instr_slab).get_ssa_direct_use_symidx_vec();
             if comp_use_rcsymidx[0] == phi_def_rcsymidx && phi_use_rcsymidx_vec.len() == 2{
                 return Ok(Some((phi_def_rcsymidx.clone(),phi_use_rcsymidx_vec[1].clone())))
             }
@@ -54,11 +54,11 @@ pub fn get_while_loop_info(cfg_node:u32,cfg_graph:&mut CfgGraph,instr_slab:&mut 
         let mut loop_step:Option<isize> = None;
         for bb_instr in bb_instr_vec{
             let bb_instr = *bb_instr;
-            let bb_instr_def_and_use_rcsymidx = instr!(at bb_instr in instr_slab)?.get_ssa_def_and_use_symidx_vec();
+            let bb_instr_def_and_use_rcsymidx = instr!(at bb_instr in instr_slab).get_ssa_def_and_use_symidx_vec();
             if mut_loop_rcsymidx == bb_instr_def_and_use_rcsymidx[0].clone(){
                 let temp_rcsymidx = bb_instr_def_and_use_rcsymidx[1];
-                let def_instr = *symtab.get(&temp_rcsymidx.as_ref_borrow())?.get_ssa_def_instr()?;
-                if let NhwcInstrType::Arith { lhs, rhs }= &instr!(at def_instr in instr_slab)?.instr_type{
+                let def_instr = *symtab.get(&temp_rcsymidx.as_ref_borrow()).get_ssa_def_instr();
+                if let NhwcInstrType::Arith { lhs, rhs }= &instr!(at def_instr in instr_slab).instr_type{
                     match rhs{
                         ArithOp::Add { a, b, vartype } | 
                         ArithOp::Mul { a, b, vartype } | 
@@ -66,7 +66,7 @@ pub fn get_while_loop_info(cfg_node:u32,cfg_graph:&mut CfgGraph,instr_slab:&mut 
                         ArithOp::Sub { a, b, vartype } => {
                             loop_arith = Some(rhs.clone());
                             let step_symidx = b.as_ref_borrow();
-                            loop_step = Some(Value::from_symidx(&step_symidx)?.as_i32()? as isize);
+                            loop_step = Some(Value::from_symidx(&step_symidx).as_i32() as isize);
                         },
                         _ => {
                             return Err(anyhow!("循环变量{:?}不是规律变化",mut_loop_rcsymidx))

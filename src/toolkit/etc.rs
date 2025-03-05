@@ -316,7 +316,7 @@ pub trait InstrAnyhow<T>:Context<T,anyhow::Error>{
 }
 impl<T> InstrAnyhow<T> for anyhow::Result<T,anyhow::Error> {
     fn with_instr_context(self,instr:usize,instr_slab:&InstrSlab<NhwcInstr>) -> Result<T,anyhow::Error>{
-        self.with_context(||format!("{:?}",instr!(at instr in instr_slab).unwrap()))
+        self.with_context(||format!("{:?}",instr!(at instr in instr_slab)))
     }
 }
 

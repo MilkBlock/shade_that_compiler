@@ -46,6 +46,7 @@ impl MemSegment{
         if first_seg_len > self.len{
             return Err(anyhow!("can't split {} mem into {} mem",self.len,first_seg_len))
         }
+
         Ok((MemSegment{
             op_symidx: op_symidx1,
             len: first_seg_len,
