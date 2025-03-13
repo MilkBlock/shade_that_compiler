@@ -8,6 +8,7 @@
 */.*/*
 *.pdf
 out/*
+*.nhwc
 for_auto_test/1s/*
 for_auto_test/2o/*
 for_auto_test/3elf/*

@@ -696,7 +696,7 @@ impl Debug for RegTab{
             map(|(r,s)|format!("    {:?}:{:?} | ",r,s))
             .sorted()
             .chunks(2).into_iter()
-            .map(|mut x| format!("{} {} \n",x.next().unwrap_or_default(),x.next().unwrap_or_default()))
+            .map(|mut x| format!("{} {} ",x.next().unwrap_or_default(),x.next().unwrap_or_default()))
             .collect();
         write!(f,"{} released_gpr_count:{},released_fpr_count:{}",s,self.gpr_released_reg_count,self.fpr_released_reg_count)
     }
